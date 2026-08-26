@@ -39,6 +39,8 @@ use App\Http\Controllers\API\Tenancy\Orders\PosController;
 use App\Http\Controllers\API\Tenancy\StaffContextController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionPlanController;
+use App\Http\Controllers\API\Tenancy\Zatca\ZatcaController;
+use App\Http\Controllers\API\Tenancy\Zatca\ZatcaPhase2Controller;
 use App\Http\Controllers\API\User\PermissionController;
 use App\Http\Controllers\API\User\RoleController;
 use App\Http\Controllers\API\User\UserController;
@@ -251,6 +253,11 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('{order}', [OrderController::class, 'show']);
         Route::patch('{order}/status', [OrderController::class, 'updateStatus']);
         Route::post('{order}/payment-link', [OrderController::class, 'paymentLink']);
+
+        // ZATCA e-invoicing: Phase 1 instant QR + Phase 2 stored UBL invoice.
+        Route::get('{order}/invoice', [ZatcaController::class, 'invoice']);
+        Route::post('{order}/zatca-invoice', [ZatcaPhase2Controller::class, 'store']);
+        Route::get('{order}/zatca-invoice', [ZatcaPhase2Controller::class, 'show']);
     });
 
     /*

@@ -228,6 +228,8 @@ return [
     'webhook_cancelled_order' => 'Webhook received for cancelled order :order_no — refund from the gateway.',
     'webhook_not_configured' => 'The payment webhook is not configured.',
     'webhook_bad_secret' => 'Invalid webhook secret.',
+    'org_not_vat_registered' => 'The organization is not VAT registered.',
+    'zatca_generation_failed' => 'Could not generate the invoice, please try again.',
 
     /*
     |--------------------------------------------------------------------------
