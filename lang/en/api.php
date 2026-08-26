@@ -138,6 +138,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Catalog & Customers & Wallet
+    |--------------------------------------------------------------------------
+    */
+    'wallet_invalid_amount' => 'The amount is invalid.',
+    'wallet_insufficient_balance' => 'Insufficient wallet balance.',
+    'wallet_topup_memo' => 'Wallet top-up: :name',
+    'phone_already_used' => 'This phone number is already used by another customer.',
+    'customer_has_orders' => 'A customer with existing orders cannot be deleted.',
+    'service_type_required' => 'At least one service type is required.',
+    'category' => 'Category',
+    'product' => 'Product',
+    'service' => 'Service',
+    'customer' => 'Customer',
+
+    /*
+    |--------------------------------------------------------------------------
     | Users
     |--------------------------------------------------------------------------
     */
