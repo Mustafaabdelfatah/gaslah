@@ -4,6 +4,7 @@ namespace App\Services\Orders;
 
 use App\Enum\Accounting\JournalSourceEnum;
 use App\Enum\Accounting\SystemAccountEnum;
+use App\Enum\Messaging\WaEventEnum;
 use App\Enum\Orders\OrderStatusEnum;
 use App\Enum\Orders\PaymentStatusEnum;
 use App\Enum\Payments\PaymentMethodEnum;
@@ -11,6 +12,7 @@ use App\Enum\Payments\WalletTransactionTypeEnum;
 use App\Models\Order;
 use App\Services\Accounting\ChartOfAccountsService;
 use App\Services\Accounting\JournalPostingService;
+use App\Services\Messaging\WaService;
 use App\Services\Payments\WalletService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
@@ -29,6 +31,7 @@ class OrderStatusService
         private readonly WalletService $wallet,
         private readonly JournalPostingService $posting,
         private readonly ChartOfAccountsService $chart,
+        private readonly WaService $wa,
     ) {}
 
     /**
@@ -64,7 +67,37 @@ class OrderStatusService
             $this->reverseOnCancel($order);
         }
 
+        $this->notifyStatus($order, $target);
+
         return $order->refresh();
+    }
+
+    /**
+     * Fire the customer WhatsApp event for a milestone status (best-effort).
+     */
+    private function notifyStatus(Order $order, OrderStatusEnum $target): void
+    {
+        $event = match ($target) {
+            OrderStatusEnum::Ready => WaEventEnum::OrderReady,
+            OrderStatusEnum::Delivered => WaEventEnum::OrderCompleted,
+            default => null,
+        };
+
+        if ($event === null) {
+            return;
+        }
+
+        $order->loadMissing('customer:id,name,phone');
+
+        $this->wa->trigger($order->organization_id, $event, $order->customer?->phone, [
+            'name' => $order->customer?->name,
+            'orderNo' => $order->order_no,
+            'total' => (string) $order->grand_total,
+        ], [
+            'branch_id' => $order->branch_id,
+            'customer_id' => $order->customer_id,
+            'order_id' => $order->getKey(),
+        ]);
     }
 
     /**

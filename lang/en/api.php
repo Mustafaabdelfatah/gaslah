@@ -242,6 +242,19 @@ return [
     'inventory_unit_not_in_org' => 'The unit does not belong to this organization.',
     'shift_already_open' => 'You already have an open shift.',
     'shift_none_open' => 'There is no open shift.',
+    'wa_invalid_phone' => 'The phone number is invalid.',
+    'wa_platform_off' => 'WhatsApp messaging is temporarily suspended platform-wide.',
+    'wa_org_disabled_by_platform' => 'WhatsApp messaging is disabled for this organization by the platform.',
+    'wa_category_off' => 'Message category :category is not enabled for this organization.',
+    'wa_event_not_allowed' => 'This message type is not allowed by the platform.',
+    'wa_quiet_hours' => 'Outside the allowed sending window (quiet hours).',
+    'wa_org_disabled' => 'Messaging is disabled in the organization settings.',
+    'wa_event_disabled' => 'This event is disabled in the organization settings.',
+    'wa_org_quota_reached' => 'The organization monthly message quota has been reached.',
+    'wa_branch_quota_reached' => 'The branch monthly message quota has been reached.',
+    'wa_send_failed' => 'Message delivery failed.',
+    'wa_webhook_not_configured' => 'The WhatsApp webhook is not configured.',
+    'wa_webhook_bad_signature' => 'Invalid webhook signature.',
 
     /*
     |--------------------------------------------------------------------------

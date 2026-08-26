@@ -15,6 +15,7 @@ use App\Http\Controllers\API\Global\Notification\NotificationController;
 use App\Http\Controllers\API\Global\Report\ReportController;
 use App\Http\Controllers\API\Global\Setting\SettingController;
 use App\Http\Controllers\API\Global\Setting\TestCredentialsController;
+use App\Http\Controllers\API\Messaging\WaWebhookController;
 use App\Http\Controllers\API\Payments\PayController;
 use App\Http\Controllers\API\Platform\AdminPayoutController;
 use App\Http\Controllers\API\Portal\PortalAuthController;
@@ -37,6 +38,7 @@ use App\Http\Controllers\API\Tenancy\Delivery\DisplayController;
 use App\Http\Controllers\API\Tenancy\Inventory\InventoryController;
 use App\Http\Controllers\API\Tenancy\Inventory\SupplierController;
 use App\Http\Controllers\API\Tenancy\Loyalty\LoyaltyController;
+use App\Http\Controllers\API\Tenancy\Messaging\WaController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
 use App\Http\Controllers\API\Tenancy\Payments\PayoutController;
@@ -101,6 +103,10 @@ Route::get('delivery/photos/{name}', [DeliveryPhotoController::class, 'show'])
 Route::get('pay/{token}', [PayController::class, 'show']);
 Route::post('pay/{token}', [PayController::class, 'pay']);
 Route::post('payments/webhook', [PayController::class, 'webhook']);
+
+// Gaslah — WhatsApp webhook (Meta verify token + HMAC fail-closed).
+Route::get('wa/webhook', [WaWebhookController::class, 'verify']);
+Route::post('wa/webhook', [WaWebhookController::class, 'receive']);
 
 Route::middleware(['auth:sanctum'])->group(function () {
     /*
@@ -356,6 +362,21 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::get('analytics', [AnalyticsController::class, 'index']);
     Route::get('dashboard', [DashboardController::class, 'index']);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — WhatsApp screen (staff, feature: messaging)
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('wa')->group(function () {
+        Route::get('overview', [WaController::class, 'overview']);
+        Route::get('messages', [WaController::class, 'messages']);
+        Route::get('templates', [WaController::class, 'templates']);
+        Route::post('templates', [WaController::class, 'storeTemplate']);
+        Route::put('templates/{template}', [WaController::class, 'updateTemplate']);
+        Route::delete('templates/{template}', [WaController::class, 'deleteTemplate']);
+        Route::post('test', [WaController::class, 'test']);
+    });
 
     /*
     |--------------------------------------------------------------------------

@@ -54,4 +54,17 @@ return [
         'base_url' => env('MOYASAR_BASE_URL', 'https://api.moyasar.com/v1'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | WhatsApp Cloud (Gaslah platform messaging)
+    |--------------------------------------------------------------------------
+    */
+    'whatsapp' => [
+        'token' => env('WHATSAPP_TOKEN'),
+        'phone_id' => env('WHATSAPP_PHONE_ID'),
+        'base_url' => env('WHATSAPP_BASE_URL', 'https://graph.facebook.com/v19.0'),
+        'webhook_verify_token' => env('WA_WEBHOOK_VERIFY_TOKEN'),
+        'app_secret' => env('WA_APP_SECRET'),
+    ],
+
 ];
