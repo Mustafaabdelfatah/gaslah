@@ -118,6 +118,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Accounting
+    |--------------------------------------------------------------------------
+    */
+    'system_account_missing' => 'System account ":key" is missing from the chart of accounts.',
+    'journal_reversal_of' => 'Reversal of entry #:entry_no',
+    'entry_unbalanced' => 'The entry is unbalanced — total debit must equal total credit.',
+    'entry_needs_two_lines' => 'An entry must contain at least two lines.',
+    'account_not_owned' => 'One of the accounts does not belong to your organization.',
+    'system_account_locked' => 'A system account\'s structure (code/type) cannot be changed; only its name is editable.',
+    'period_locked' => 'The accounting period is locked for this date — posting is not allowed.',
+
+    /*
+    |--------------------------------------------------------------------------
     | Users
     |--------------------------------------------------------------------------
     */
