@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\Portal;
 use App\Models\CustomerAddress;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\OrgAnnouncement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -138,6 +139,21 @@ class PortalController extends PortalBaseController
         });
 
         return successResponse($address, __('api.created_success'), 201);
+    }
+
+    /**
+     * The active announcements of the customer's organization (portal carousel).
+     */
+    public function announcements(): JsonResponse
+    {
+        $announcements = OrgAnnouncement::query()
+            ->forOrganization($this->customer()->organization_id)
+            ->where('is_active', true)
+            ->latest('id')
+            ->limit(20)
+            ->get(['id', 'title', 'body', 'image_url']);
+
+        return successResponse($announcements);
     }
 
     public function destroyAddress(int $id): JsonResponse

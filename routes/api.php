@@ -38,6 +38,9 @@ use App\Http\Controllers\API\Tenancy\Delivery\DisplayController;
 use App\Http\Controllers\API\Tenancy\Inventory\InventoryController;
 use App\Http\Controllers\API\Tenancy\Inventory\SupplierController;
 use App\Http\Controllers\API\Tenancy\Loyalty\LoyaltyController;
+use App\Http\Controllers\API\Tenancy\Messaging\AlertsController;
+use App\Http\Controllers\API\Tenancy\Messaging\NotificationLogController;
+use App\Http\Controllers\API\Tenancy\Messaging\OrgAnnouncementController;
 use App\Http\Controllers\API\Tenancy\Messaging\WaController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
@@ -378,6 +381,19 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('test', [WaController::class, 'test']);
     });
 
+    // Live operational alerts + outbound message log (a distinct path from the
+    // framework's user-notifications route).
+    Route::get('alerts', [AlertsController::class, 'index']);
+    Route::get('notifications-log', [NotificationLogController::class, 'index']);
+
+    // Organization announcements (portal carousel; writes manager-gated).
+    Route::prefix('announcements')->group(function () {
+        Route::get('/', [OrgAnnouncementController::class, 'index']);
+        Route::post('/', [OrgAnnouncementController::class, 'store']);
+        Route::put('{announcement}', [OrgAnnouncementController::class, 'update']);
+        Route::delete('{announcement}', [OrgAnnouncementController::class, 'destroy']);
+    });
+
     /*
     |--------------------------------------------------------------------------
     | Gaslah — Inventory, Suppliers & Purchase Orders (feature: inventory)
@@ -484,5 +500,7 @@ Route::prefix('portal')->group(function () {
         Route::get('delivery', [PortalDeliveryController::class, 'index']);
         Route::post('delivery', [PortalDeliveryController::class, 'store']);
         Route::post('delivery/{id}/approve-invoice', [PortalDeliveryController::class, 'approveInvoice']);
+
+        Route::get('announcements', [PortalController::class, 'announcements']);
     });
 });
