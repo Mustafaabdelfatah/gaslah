@@ -38,6 +38,7 @@ use App\Http\Controllers\API\Tenancy\Loyalty\LoyaltyController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
 use App\Http\Controllers\API\Tenancy\Payments\PayoutController;
+use App\Http\Controllers\API\Tenancy\Reports\ReportController as SalesReportController;
 use App\Http\Controllers\API\Tenancy\StaffContextController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionPlanController;
@@ -333,6 +334,18 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/', [PayoutController::class, 'index']);
         Route::patch('config', [PayoutController::class, 'config']);
         Route::post('request', [PayoutController::class, 'request']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — Reports (staff, read-only)
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('reports')->group(function () {
+        Route::get('sales', [SalesReportController::class, 'sales']);
+        Route::get('top-products', [SalesReportController::class, 'topProducts']);
+        Route::get('top-customers', [SalesReportController::class, 'topCustomers']);
+        Route::get('cancellation-rate', [SalesReportController::class, 'cancellationRate']);
     });
 });
 
