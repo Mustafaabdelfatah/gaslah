@@ -1,0 +1,23 @@
+{
+    "$schema": "https://www.schemastore.org/package.json",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "dev": "vite",
+        "docs": "vitepress dev documentation",
+        "docs:build": "vitepress build documentation",
+        "docs:preview": "vitepress preview documentation",
+        "docs:serve": "vitepress preview documentation"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.60.0",
+        "@tailwindcss/vite": "^4.0.0",
+        "axios": "^1.17.0",
+        "concurrently": "^9.0.1",
+        "laravel-vite-plugin": "^3.0.0",
+        "tailwindcss": "^4.0.0",
+        "vite": "^8.0.0",
+        "vitepress": "^1.0.0"
+    }
+}
