@@ -24,6 +24,7 @@ use App\Http\Controllers\API\Tenancy\Auth\PlatformLoginController;
 use App\Http\Controllers\API\Tenancy\Auth\StaffLoginController;
 use App\Http\Controllers\API\Tenancy\Catalog\CatalogController;
 use App\Http\Controllers\API\Tenancy\Catalog\CustomerController;
+use App\Http\Controllers\API\Tenancy\Delivery\DeliveryController;
 use App\Http\Controllers\API\Tenancy\Loyalty\LoyaltyController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
@@ -261,4 +262,22 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // Redeem points for wallet value — customer-scoped path per the spec.
     Route::post('customers/{customer}/loyalty/redeem', [LoyaltyController::class, 'redeem']);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — Delivery (staff, feature: delivery)
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('delivery')->group(function () {
+        Route::get('settings', [DeliveryController::class, 'settings']);
+        Route::put('settings', [DeliveryController::class, 'updateSettings']);
+
+        Route::get('zones', [DeliveryController::class, 'zones']);
+        Route::post('zones', [DeliveryController::class, 'storeZone']);
+        Route::put('zones/{zone}', [DeliveryController::class, 'updateZone']);
+
+        Route::get('drivers', [DeliveryController::class, 'drivers']);
+        Route::post('drivers', [DeliveryController::class, 'storeDriver']);
+        Route::put('drivers/{driver}', [DeliveryController::class, 'updateDriver']);
+    });
 });

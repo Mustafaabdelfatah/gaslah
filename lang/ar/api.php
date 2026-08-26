@@ -189,6 +189,13 @@ return [
     'loyalty_manual_adjustment' => 'تعديل يدوي للنقاط',
     'loyalty_redeem_note' => 'استبدال نقاط برصيد محفظة',
     'loyalty_redeem_wallet_memo' => 'استبدال :points نقطة ولاء',
+    'delivery_created' => 'تم إنشاء طلب توصيل',
+    'delivery_created_portal' => 'طلب من بوابة العميل',
+    'delivery_assigned' => 'أُسند للسائق :name',
+    'delivery_external_assigned' => 'إسناد لتطبيق خارجي: :provider',
+    'delivery_status_changed' => 'تم تحديث حالة التوصيل',
+    'delivery_invalid_transition' => 'انتقال حالة التوصيل غير مسموح به.',
+    'delivery_driver_phone_taken' => 'رقم الهاتف مستخدم من سائق آخر.',
 
     /*
     |--------------------------------------------------------------------------

@@ -189,6 +189,13 @@ return [
     'loyalty_manual_adjustment' => 'Manual points adjustment',
     'loyalty_redeem_note' => 'Points redeemed for wallet value',
     'loyalty_redeem_wallet_memo' => 'Redeemed :points loyalty points',
+    'delivery_created' => 'Delivery request created',
+    'delivery_created_portal' => 'Requested from the customer portal',
+    'delivery_assigned' => 'Assigned to driver :name',
+    'delivery_external_assigned' => 'Assigned to external app: :provider',
+    'delivery_status_changed' => 'Delivery status updated',
+    'delivery_invalid_transition' => 'This delivery status transition is not allowed.',
+    'delivery_driver_phone_taken' => 'This phone number is already used by another driver.',
 
     /*
     |--------------------------------------------------------------------------
