@@ -16,6 +16,7 @@ use App\Http\Controllers\API\Global\Report\ReportController;
 use App\Http\Controllers\API\Global\Setting\SettingController;
 use App\Http\Controllers\API\Global\Setting\TestCredentialsController;
 use App\Http\Controllers\API\Payments\PayController;
+use App\Http\Controllers\API\Platform\AdminPayoutController;
 use App\Http\Controllers\API\Portal\PortalAuthController;
 use App\Http\Controllers\API\Portal\PortalController;
 use App\Http\Controllers\API\Portal\PortalDeliveryController;
@@ -36,6 +37,7 @@ use App\Http\Controllers\API\Tenancy\Delivery\DisplayController;
 use App\Http\Controllers\API\Tenancy\Loyalty\LoyaltyController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
+use App\Http\Controllers\API\Tenancy\Payments\PayoutController;
 use App\Http\Controllers\API\Tenancy\StaffContextController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionPlanController;
@@ -321,6 +323,37 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // Mint an in-store display link for a branch.
     Route::post('display/token', [DisplayController::class, 'token']);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — Payouts (organization side)
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('payouts')->group(function () {
+        Route::get('/', [PayoutController::class, 'index']);
+        Route::patch('config', [PayoutController::class, 'config']);
+        Route::post('request', [PayoutController::class, 'request']);
+    });
+});
+
+/*
+|--------------------------------------------------------------------------
+| Gaslah — Payout settlements (platform admin, maker-checker)
+|--------------------------------------------------------------------------
+*/
+Route::middleware('auth:sanctum')->prefix('admin/payouts')->group(function () {
+    Route::get('/', [AdminPayoutController::class, 'index']);
+    Route::post('/', [AdminPayoutController::class, 'store']);
+    Route::get('balances', [AdminPayoutController::class, 'balances']);
+    Route::post('run-due', [AdminPayoutController::class, 'runDue']);
+    Route::get('settings', [AdminPayoutController::class, 'settings']);
+    Route::patch('settings', [AdminPayoutController::class, 'updateSettings']);
+    Route::get('{settlement}', [AdminPayoutController::class, 'show']);
+    Route::post('{settlement}/approve', [AdminPayoutController::class, 'approve']);
+    Route::post('{settlement}/reject', [AdminPayoutController::class, 'reject']);
+    Route::patch('{settlement}/fee', [AdminPayoutController::class, 'fee']);
+    Route::post('{settlement}/sent', [AdminPayoutController::class, 'sent']);
+    Route::post('{settlement}/cancel', [AdminPayoutController::class, 'cancel']);
 });
 
 /*

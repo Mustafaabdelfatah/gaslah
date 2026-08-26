@@ -230,6 +230,15 @@ return [
     'webhook_bad_secret' => 'Invalid webhook secret.',
     'org_not_vat_registered' => 'The organization is not VAT registered.',
     'zatca_generation_failed' => 'Could not generate the invoice, please try again.',
+    'payout_open_exists' => 'An open settlement already exists for this organization.',
+    'payout_pool_empty' => 'There are no unsettled payments to settle.',
+    'payout_race' => 'The settlement could not be created, please try again.',
+    'payout_not_pending' => 'The settlement is not pending approval.',
+    'payout_not_approved' => 'The settlement is not approved.',
+    'payout_not_open' => 'The settlement is not open.',
+    'payout_creator_cannot_approve' => 'The settlement creator cannot approve it.',
+    'payout_already_voted' => 'You have already voted on this settlement.',
+    'payout_iban_required' => 'A bank IBAN must be configured first.',
 
     /*
     |--------------------------------------------------------------------------
