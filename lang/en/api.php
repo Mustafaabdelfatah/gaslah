@@ -128,6 +128,8 @@ return [
     'account_not_owned' => 'One of the accounts does not belong to your organization.',
     'system_account_locked' => 'A system account\'s structure (code/type) cannot be changed; only its name is editable.',
     'period_locked' => 'The accounting period is locked for this date — posting is not allowed.',
+    'expense_memo' => 'Expense: :category — :description',
+    'expense_reversal_memo' => 'Expense reversal',
 
     /*
     |--------------------------------------------------------------------------
