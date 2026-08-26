@@ -143,6 +143,7 @@ return [
     'dunning_dunning' => 'Your Gaslah subscription for :org needs attention — please settle it to avoid interruption.',
     'dunning_trial_ending' => 'Your Gaslah trial for :org is ending soon. Subscribe to keep your service running.',
     'dunning_suspended' => 'Your Gaslah account for :org has been suspended for non-payment. Please settle to reactivate.',
+    'coupon_not_redeemable' => 'This coupon is not valid or has been fully redeemed.',
 
     /*
     |--------------------------------------------------------------------------

@@ -21,6 +21,7 @@ use App\Http\Controllers\API\Global\Setting\TestCredentialsController;
 use App\Http\Controllers\API\Messaging\WaWebhookController;
 use App\Http\Controllers\API\Payments\PayController;
 use App\Http\Controllers\API\Platform\AdminAnnouncementController;
+use App\Http\Controllers\API\Platform\AdminCouponController;
 use App\Http\Controllers\API\Platform\AdminDunningController;
 use App\Http\Controllers\API\Platform\AdminInvoiceController;
 use App\Http\Controllers\API\Platform\AdminPayoutController;
@@ -541,6 +542,13 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::get('dunning', [AdminDunningController::class, 'index']);
     Route::put('dunning', [AdminDunningController::class, 'update']);
     Route::post('dunning/run', [AdminDunningController::class, 'run']);
+
+    // Subscription coupons.
+    Route::post('coupons/validate', [AdminCouponController::class, 'validateCode']);
+    Route::get('coupons', [AdminCouponController::class, 'index']);
+    Route::post('coupons', [AdminCouponController::class, 'store']);
+    Route::put('coupons/{coupon}', [AdminCouponController::class, 'update']);
+    Route::delete('coupons/{coupon}', [AdminCouponController::class, 'destroy']);
 });
 
 Route::middleware('auth:sanctum')->prefix('admin/payouts')->group(function () {
