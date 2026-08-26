@@ -7,6 +7,7 @@ use App\Exceptions\InvalidOtpException;
 use App\Exceptions\InvalidPasswordResetTokenException;
 use App\Exceptions\ModelAlreadyExistsException;
 use App\Http\Middleware\LanguageMiddleware;
+use App\Services\Accounting\AccountingException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -78,6 +79,17 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (AuthenticationException $e, Request $request) {
             if ($request->acceptsJson()) {
                 return failResponse(__('auth.unauthenticated'), code: 401);
+            }
+        });
+
+        $exceptions->render(function (AccountingException $e, Request $request) {
+            if ($request->acceptsJson()) {
+                // A malformed entry is the caller's mistake, not a server fault.
+                $message = str_starts_with($e->getMessage(), 'UNBALANCED_ENTRY')
+                    ? __('api.entry_unbalanced')
+                    : __('api.entry_needs_two_lines');
+
+                return failResponse($message, code: 422);
             }
         });
     })->create();

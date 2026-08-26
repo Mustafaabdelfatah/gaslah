@@ -14,6 +14,12 @@ use App\Http\Controllers\API\Global\Report\ReportController;
 use App\Http\Controllers\API\Global\Setting\SettingController;
 use App\Http\Controllers\API\Global\Setting\TestCredentialsController;
 use App\Http\Controllers\API\Profile\ProfileController;
+use App\Http\Controllers\API\Tenancy\Accounting\AccountController;
+use App\Http\Controllers\API\Tenancy\Accounting\AccountingReportController;
+use App\Http\Controllers\API\Tenancy\Accounting\AssetController;
+use App\Http\Controllers\API\Tenancy\Accounting\BooksLockController;
+use App\Http\Controllers\API\Tenancy\Accounting\ExpenseController;
+use App\Http\Controllers\API\Tenancy\Accounting\JournalController;
 use App\Http\Controllers\API\Tenancy\Auth\PlatformLoginController;
 use App\Http\Controllers\API\Tenancy\Auth\StaffLoginController;
 use App\Http\Controllers\API\Tenancy\StaffContextController;
@@ -130,5 +136,48 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('restore', [UserController::class, 'restore']);
         Route::put('toggle-active', [UserController::class, 'toggleActive']);
         Route::apiResource('/', UserController::class)->parameters(['' => 'user'])->except(['destroy']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — Accounting (staff, manager-gated)
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('accounting')->group(function () {
+        // Chart of accounts
+        Route::get('accounts', [AccountController::class, 'index']);
+        Route::post('accounts', [AccountController::class, 'store']);
+        Route::patch('accounts/{account}', [AccountController::class, 'update']);
+
+        // Journal
+        Route::get('journal', [JournalController::class, 'index']);
+        Route::post('journal', [JournalController::class, 'store']);
+        Route::get('journal/{journal}', [JournalController::class, 'show']);
+        Route::post('journal/{journal}/reverse', [JournalController::class, 'reverse']);
+
+        // Reports
+        Route::get('trial-balance', [AccountingReportController::class, 'trialBalance']);
+        Route::get('income-statement', [AccountingReportController::class, 'incomeStatement']);
+        Route::get('balance-sheet', [AccountingReportController::class, 'balanceSheet']);
+        Route::get('vat-return', [AccountingReportController::class, 'vatReturn']);
+        Route::get('ledger/{account}', [AccountingReportController::class, 'ledger']);
+
+        // Expenses
+        Route::get('expenses', [ExpenseController::class, 'index']);
+        Route::post('expenses', [ExpenseController::class, 'store']);
+        Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy']);
+
+        // Period lock
+        Route::get('period-lock', [BooksLockController::class, 'show']);
+        Route::put('period-lock', [BooksLockController::class, 'update']);
+    });
+
+    // Fixed assets
+    Route::prefix('assets')->group(function () {
+        Route::get('/', [AssetController::class, 'index']);
+        Route::post('/', [AssetController::class, 'store']);
+        Route::post('{asset}/depreciate', [AssetController::class, 'depreciate']);
+        Route::post('{asset}/dispose', [AssetController::class, 'dispose']);
+        Route::delete('{asset}', [AssetController::class, 'destroy']);
     });
 });
