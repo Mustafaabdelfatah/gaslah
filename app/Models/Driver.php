@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Illuminate\Auth\Authenticatable as AuthenticatableTrait;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,9 +16,9 @@ use Laravel\Sanctum\HasApiTokens;
  * The phone is unique system-wide so it resolves a single driver at OTP login. A driver
  * authenticates on its own Sanctum surface (kind = driver), separate from staff.
  */
-class Driver extends BaseModel
+class Driver extends BaseModel implements Authenticatable
 {
-    use HasApiTokens, HasFactory;
+    use AuthenticatableTrait, HasApiTokens, HasFactory;
 
     protected $fillable = [
         'organization_id',

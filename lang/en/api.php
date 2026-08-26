@@ -207,6 +207,14 @@ return [
     'delivery_portal_ordering_disabled' => 'Portal ordering is not enabled.',
     'delivery_no_driver_method' => 'No delivery method with a driver is enabled.',
     'delivery_approval_not_required' => 'This request does not require invoice approval.',
+    'driver_inactive' => 'This driver account is disabled.',
+    'delivery_accepted' => 'The driver accepted the request',
+    'delivery_rejected' => 'The driver rejected the request',
+    'delivery_cannot_accept' => 'The request cannot be accepted in its current state.',
+    'delivery_cannot_reject' => 'The request cannot be rejected after work has started.',
+    'delivery_accept_first' => 'The request must be accepted first.',
+    'delivery_pickup_photo_required' => 'A pickup proof photo is required.',
+    'delivery_invalid_image' => 'The image is invalid.',
 
     /*
     |--------------------------------------------------------------------------

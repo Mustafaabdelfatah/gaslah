@@ -207,6 +207,14 @@ return [
     'delivery_portal_ordering_disabled' => 'طلب التوصيل من البوابة غير مفعّل.',
     'delivery_no_driver_method' => 'لا توجد طريقة توصيل بسائق مفعّلة.',
     'delivery_approval_not_required' => 'لا يلزم موافقة على هذا الطلب.',
+    'driver_inactive' => 'حساب السائق معطّل.',
+    'delivery_accepted' => 'قبل المندوب الطلب',
+    'delivery_rejected' => 'رفض المندوب الطلب',
+    'delivery_cannot_accept' => 'لا يمكن قبول الطلب في حالته الحالية.',
+    'delivery_cannot_reject' => 'لا يمكن رفض الطلب بعد بدء التنفيذ.',
+    'delivery_accept_first' => 'يلزم قبول الطلب أولاً.',
+    'delivery_pickup_photo_required' => 'يلزم إرفاق صورة الاستلام.',
+    'delivery_invalid_image' => 'الصورة غير صالحة.',
 
     /*
     |--------------------------------------------------------------------------

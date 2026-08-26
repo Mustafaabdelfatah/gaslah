@@ -5,6 +5,8 @@ use App\Http\Controllers\API\Auth\LogoutController;
 use App\Http\Controllers\API\Auth\OTPController;
 use App\Http\Controllers\API\Auth\ResetPasswordController;
 use App\Http\Controllers\API\DataEntry\CountryController;
+use App\Http\Controllers\API\Driver\DriverAuthController;
+use App\Http\Controllers\API\Driver\DriverController;
 use App\Http\Controllers\API\Global\ActivityLog\ActivityLogController;
 use App\Http\Controllers\API\Global\Captcha\CaptchaController;
 use App\Http\Controllers\API\Global\Chunk\ChunkFileController;
@@ -288,5 +290,25 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::patch('requests/{delivery}', [DeliveryController::class, 'updateRequest']);
         Route::post('requests/{delivery}/action', [DeliveryController::class, 'requestAction']);
         Route::post('requests/{delivery}/inventory', [DeliveryController::class, 'inventory']);
+    });
+});
+
+/*
+|--------------------------------------------------------------------------
+| Gaslah — Driver App (phone + OTP, kind=driver)
+|--------------------------------------------------------------------------
+*/
+Route::prefix('driver')->group(function () {
+    Route::post('auth/request-otp', [DriverAuthController::class, 'requestOtp']);
+    Route::post('auth/verify-otp', [DriverAuthController::class, 'verifyOtp']);
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('me', [DriverController::class, 'me']);
+        Route::get('requests', [DriverController::class, 'requests']);
+        Route::post('requests/{id}/accept', [DriverController::class, 'accept']);
+        Route::post('requests/{id}/reject', [DriverController::class, 'reject']);
+        Route::post('requests/{id}/arrive', [DriverController::class, 'arrive']);
+        Route::post('requests/{id}/photo', [DriverController::class, 'photo']);
+        Route::post('requests/{id}/advance', [DriverController::class, 'advance']);
     });
 });
