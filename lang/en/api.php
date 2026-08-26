@@ -259,6 +259,7 @@ return [
     'forum_pending_limit' => 'You have too many threads awaiting review.',
     'forum_thread_pending' => 'Your thread is awaiting moderator approval.',
     'forum_thread_closed' => 'This thread is closed.',
+    'signup_closed' => 'Public signup is currently closed.',
 
     /*
     |--------------------------------------------------------------------------

@@ -67,4 +67,14 @@ return [
         'app_secret' => env('WA_APP_SECRET'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Platform (Gaslah SaaS operator)
+    |--------------------------------------------------------------------------
+    */
+    'platform' => [
+        'allow_public_signup' => env('PLATFORM_ALLOW_PUBLIC_SIGNUP', true),
+        'trial_days' => env('PLATFORM_TRIAL_DAYS', 14),
+    ],
+
 ];

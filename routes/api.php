@@ -6,6 +6,7 @@ use App\Http\Controllers\API\Auth\LoginController;
 use App\Http\Controllers\API\Auth\LogoutController;
 use App\Http\Controllers\API\Auth\OTPController;
 use App\Http\Controllers\API\Auth\ResetPasswordController;
+use App\Http\Controllers\API\Auth\SignupController;
 use App\Http\Controllers\API\DataEntry\CountryController;
 use App\Http\Controllers\API\Driver\DriverAuthController;
 use App\Http\Controllers\API\Driver\DriverController;
@@ -85,6 +86,9 @@ Route::prefix('captcha')->group(function () {
 */
 Route::post('login', LoginController::class);
 Route::post('reset-password', ResetPasswordController::class);
+
+// Gaslah — public self-service tenant signup.
+Route::post('signup', [SignupController::class, 'store'])->middleware('throttle:10,1');
 
 /*
 |--------------------------------------------------------------------------
