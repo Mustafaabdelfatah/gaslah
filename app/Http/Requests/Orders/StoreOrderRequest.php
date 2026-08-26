@@ -30,7 +30,7 @@ class StoreOrderRequest extends BaseFormRequest
             'items.*.notes' => ['nullable', 'string', 'max:500'],
 
             'payment' => ['nullable', 'array'],
-            'payment.method' => ['required_with:payment', 'in:cash,card,transfer,wallet,deferred'],
+            'payment.method' => ['required_with:payment', 'in:cash,card,transfer,wallet,deferred,subscription'],
             'payment.amount' => ['nullable', 'numeric', 'min:0'],
             'payment.verify_mode' => ['nullable', 'in:manual,terminal'],
             'payment.reference' => ['nullable', 'string', 'max:255'],

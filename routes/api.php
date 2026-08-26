@@ -27,6 +27,8 @@ use App\Http\Controllers\API\Tenancy\Catalog\CustomerController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
 use App\Http\Controllers\API\Tenancy\StaffContextController;
+use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionController;
+use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionPlanController;
 use App\Http\Controllers\API\User\PermissionController;
 use App\Http\Controllers\API\User\RoleController;
 use App\Http\Controllers\API\User\UserController;
@@ -225,5 +227,22 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/', [OrderController::class, 'index']);
         Route::get('{order}', [OrderController::class, 'show']);
         Route::patch('{order}/status', [OrderController::class, 'updateStatus']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — Customer Subscriptions (staff, feature: subscriptions)
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('subscription-plans')->group(function () {
+        Route::get('/', [SubscriptionPlanController::class, 'index']);
+        Route::post('/', [SubscriptionPlanController::class, 'store']);
+        Route::put('{plan}', [SubscriptionPlanController::class, 'update']);
+    });
+
+    Route::prefix('subscriptions')->group(function () {
+        Route::get('/', [SubscriptionController::class, 'index']);
+        Route::post('/', [SubscriptionController::class, 'store']);
+        Route::post('{subscription}/pay', [SubscriptionController::class, 'pay']);
     });
 });

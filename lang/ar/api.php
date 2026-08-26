@@ -176,6 +176,12 @@ return [
     'subscription_not_paid' => 'الاشتراك غير مدفوع — يلزم تحصيله أولاً.',
     'subscription_quota_insufficient' => 'رصيد قطع الاشتراك غير كافٍ (المتبقي: :remaining).',
     'subscription_balance_insufficient' => 'رصيد الاشتراك غير كافٍ (المتبقي: :remaining).',
+    'subscription_plan_not_found' => 'الباقة غير موجودة.',
+    'subscription_price_zero' => 'سعر الباقة صفر — لا يوجد ما يُحصَّل.',
+    'subscription_already_paid' => 'الاشتراك مدفوع مسبقاً.',
+    'subscription_collected' => 'تم تحصيل الاشتراك بنجاح.',
+    'subscription_payment_memo' => 'دفع اشتراك: :name',
+    'subscription_consume_memo' => 'استهلاك اشتراك للسلة :order_no',
 
     /*
     |--------------------------------------------------------------------------

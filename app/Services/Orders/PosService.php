@@ -12,6 +12,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Service;
 use App\Services\Payments\WalletService;
+use App\Services\Subscriptions\SubscriptionConsumptionService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
@@ -28,12 +29,19 @@ class PosService
 {
     private const MAX_CREATE_ATTEMPTS = 6;
 
+    /**
+     * A settlement drawn from the customer's subscription rather than a payment
+     * method. It writes no payment row (subscription is absent from PaymentMethodEnum).
+     */
+    private const SUBSCRIPTION_METHOD = 'subscription';
+
     public function __construct(
         private readonly OrderPricingService $pricing,
         private readonly OrderNumberService $numbers,
         private readonly WalletService $wallet,
         private readonly PosOtpService $otp,
         private readonly OrderAccountingService $accounting,
+        private readonly SubscriptionConsumptionService $subscriptions,
     ) {}
 
     /**
@@ -174,6 +182,14 @@ class PosService
             return;
         }
 
+        // Settling from a subscription draws prepaid quota/balance rather than taking a
+        // payment method; it writes no payment row and recognises deferred revenue.
+        if (($payment['method'] ?? null) === self::SUBSCRIPTION_METHOD) {
+            $this->subscriptions->consume($order, $customer);
+
+            return;
+        }
+
         $method = PaymentMethodEnum::from($payment['method']);
 
         match ($method) {
@@ -305,6 +321,12 @@ class PosService
     private function validatePayment(?array $payment, Customer $customer, float $grandTotal): void
     {
         if ($payment === null) {
+            return;
+        }
+
+        // A subscription settlement carries no payment method to verify; the
+        // consumption service does its own checks at settlement time.
+        if (($payment['method'] ?? null) === self::SUBSCRIPTION_METHOD) {
             return;
         }
 

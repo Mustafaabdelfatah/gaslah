@@ -176,6 +176,12 @@ return [
     'subscription_not_paid' => 'The subscription is not paid — it must be collected first.',
     'subscription_quota_insufficient' => 'Insufficient subscription piece quota (remaining: :remaining).',
     'subscription_balance_insufficient' => 'Insufficient subscription balance (remaining: :remaining).',
+    'subscription_plan_not_found' => 'The subscription plan was not found.',
+    'subscription_price_zero' => 'The plan price is zero — there is nothing to collect.',
+    'subscription_already_paid' => 'The subscription has already been collected.',
+    'subscription_collected' => 'The subscription was collected successfully.',
+    'subscription_payment_memo' => 'Subscription payment: :name',
+    'subscription_consume_memo' => 'Subscription consumption for cart :order_no',
 
     /*
     |--------------------------------------------------------------------------
