@@ -21,6 +21,7 @@ use App\Http\Controllers\API\Global\Setting\TestCredentialsController;
 use App\Http\Controllers\API\Messaging\WaWebhookController;
 use App\Http\Controllers\API\Payments\PayController;
 use App\Http\Controllers\API\Platform\AdminAnnouncementController;
+use App\Http\Controllers\API\Platform\AdminDunningController;
 use App\Http\Controllers\API\Platform\AdminInvoiceController;
 use App\Http\Controllers\API\Platform\AdminPayoutController;
 use App\Http\Controllers\API\Platform\AdminPlanController;
@@ -535,6 +536,11 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::post('tenants/{organization}/invoices', [AdminInvoiceController::class, 'store']);
     Route::post('invoices/{invoice}/confirm', [AdminInvoiceController::class, 'confirm']);
     Route::delete('invoices/{invoice}', [AdminInvoiceController::class, 'destroy']);
+
+    // Dunning — reminder/renewal/suspension cycle.
+    Route::get('dunning', [AdminDunningController::class, 'index']);
+    Route::put('dunning', [AdminDunningController::class, 'update']);
+    Route::post('dunning/run', [AdminDunningController::class, 'run']);
 });
 
 Route::middleware('auth:sanctum')->prefix('admin/payouts')->group(function () {

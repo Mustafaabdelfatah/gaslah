@@ -21,6 +21,7 @@ enum PlatformAuditActionEnum: string
     case Archive = 'archive';
     case Unarchive = 'unarchive';
     case Export = 'export';
+    case Dunning = 'dunning';
 
     /**
      * @return array<int, string>

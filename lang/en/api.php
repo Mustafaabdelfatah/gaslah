@@ -140,6 +140,9 @@ return [
     'invoice_issue_failed' => 'Could not issue the invoice, please try again.',
     'invoice_plan_required' => 'A plan is required to invoice this organization.',
     'invoice_issued_no_delete' => 'An issued invoice cannot be deleted.',
+    'dunning_dunning' => 'Your Gaslah subscription for :org needs attention — please settle it to avoid interruption.',
+    'dunning_trial_ending' => 'Your Gaslah trial for :org is ending soon. Subscribe to keep your service running.',
+    'dunning_suspended' => 'Your Gaslah account for :org has been suspended for non-payment. Please settle to reactivate.',
 
     /*
     |--------------------------------------------------------------------------

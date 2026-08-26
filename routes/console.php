@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // Gaslah — auto-advance aged orders to ready every five minutes.
 Schedule::command('automation:sweep')->everyFiveMinutes()->withoutOverlapping();
+
+// Gaslah — subscription dunning cycle once a day (no-op while the policy is disabled).
+Schedule::command('platform:dunning')->dailyAt('06:00')->withoutOverlapping();
