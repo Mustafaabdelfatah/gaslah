@@ -34,6 +34,8 @@ use App\Http\Controllers\API\Tenancy\Catalog\CustomerController;
 use App\Http\Controllers\API\Tenancy\Delivery\DeliveryController;
 use App\Http\Controllers\API\Tenancy\Delivery\DeliveryPhotoController;
 use App\Http\Controllers\API\Tenancy\Delivery\DisplayController;
+use App\Http\Controllers\API\Tenancy\Inventory\InventoryController;
+use App\Http\Controllers\API\Tenancy\Inventory\SupplierController;
 use App\Http\Controllers\API\Tenancy\Loyalty\LoyaltyController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
@@ -352,6 +354,25 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::get('analytics', [AnalyticsController::class, 'index']);
     Route::get('dashboard', [DashboardController::class, 'index']);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — Inventory, Suppliers & Purchase Orders (feature: inventory)
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('inventory')->group(function () {
+        Route::get('items', [InventoryController::class, 'items']);
+        Route::post('items', [InventoryController::class, 'storeItem']);
+        Route::put('items/{item}', [InventoryController::class, 'updateItem']);
+        Route::get('low-stock', [InventoryController::class, 'lowStock']);
+        Route::get('purchase-orders', [InventoryController::class, 'purchaseOrders']);
+    });
+
+    Route::prefix('suppliers')->group(function () {
+        Route::get('/', [SupplierController::class, 'index']);
+        Route::post('/', [SupplierController::class, 'store']);
+        Route::put('{supplier}', [SupplierController::class, 'update']);
+    });
 });
 
 /*

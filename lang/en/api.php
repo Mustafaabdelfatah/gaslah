@@ -239,6 +239,7 @@ return [
     'payout_creator_cannot_approve' => 'The settlement creator cannot approve it.',
     'payout_already_voted' => 'You have already voted on this settlement.',
     'payout_iban_required' => 'A bank IBAN must be configured first.',
+    'inventory_unit_not_in_org' => 'The unit does not belong to this organization.',
 
     /*
     |--------------------------------------------------------------------------
