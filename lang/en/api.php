@@ -216,6 +216,8 @@ return [
     'delivery_pickup_photo_required' => 'A pickup proof photo is required.',
     'delivery_invalid_image' => 'The image is invalid.',
     'branch_not_available' => 'This branch is not available.',
+    'delivery_invoice_approved' => 'The customer approved the invoice',
+    'order_not_found' => 'The order was not found.',
 
     /*
     |--------------------------------------------------------------------------

@@ -4,22 +4,26 @@ namespace App\Models;
 
 use App\Enum\Catalog\CustomerTypeEnum;
 use App\Trait\Global\LogsActivityOptions;
+use Illuminate\Auth\Authenticatable as AuthenticatableTrait;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Laravel\Sanctum\HasApiTokens;
 
 /**
  * A laundry customer.
  *
- * `wallet_balance` is deliberately absent from $fillable: it is the locked source of
- * truth for stored value and is only ever written by the wallet service inside a
- * row-locked transaction.
+ * A customer authenticates on the portal surface (kind = customer) via phone + OTP; the
+ * Sanctum token is its only credential (no password). `wallet_balance` is deliberately
+ * absent from $fillable: it is the locked source of truth for stored value and is only
+ * ever written by the wallet service inside a row-locked transaction.
  */
-class Customer extends BaseModel
+class Customer extends BaseModel implements Authenticatable
 {
-    use HasFactory, LogsActivityOptions, SoftDeletes;
+    use AuthenticatableTrait, HasApiTokens, HasFactory, LogsActivityOptions, SoftDeletes;
 
     protected $fillable = [
         'legacy_cuid',

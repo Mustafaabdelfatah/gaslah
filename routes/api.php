@@ -15,6 +15,9 @@ use App\Http\Controllers\API\Global\Notification\NotificationController;
 use App\Http\Controllers\API\Global\Report\ReportController;
 use App\Http\Controllers\API\Global\Setting\SettingController;
 use App\Http\Controllers\API\Global\Setting\TestCredentialsController;
+use App\Http\Controllers\API\Portal\PortalAuthController;
+use App\Http\Controllers\API\Portal\PortalController;
+use App\Http\Controllers\API\Portal\PortalDeliveryController;
 use App\Http\Controllers\API\Profile\ProfileController;
 use App\Http\Controllers\API\Tenancy\Accounting\AccountController;
 use App\Http\Controllers\API\Tenancy\Accounting\AccountingReportController;
@@ -322,5 +325,30 @@ Route::prefix('driver')->group(function () {
         Route::post('requests/{id}/arrive', [DriverController::class, 'arrive']);
         Route::post('requests/{id}/photo', [DriverController::class, 'photo']);
         Route::post('requests/{id}/advance', [DriverController::class, 'advance']);
+    });
+});
+
+/*
+|--------------------------------------------------------------------------
+| Gaslah — Customer Portal (phone + OTP, kind=customer)
+|--------------------------------------------------------------------------
+*/
+Route::prefix('portal')->group(function () {
+    Route::post('auth/request-otp', [PortalAuthController::class, 'requestOtp']);
+    Route::post('auth/verify-otp', [PortalAuthController::class, 'verifyOtp']);
+    Route::get('branding/{slug}', [PortalAuthController::class, 'branding']);
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('me', [PortalController::class, 'me']);
+        Route::get('orders', [PortalController::class, 'orders']);
+        Route::get('orders/{id}', [PortalController::class, 'order']);
+
+        Route::get('addresses', [PortalController::class, 'addresses']);
+        Route::post('addresses', [PortalController::class, 'storeAddress']);
+        Route::delete('addresses/{id}', [PortalController::class, 'destroyAddress']);
+
+        Route::get('delivery', [PortalDeliveryController::class, 'index']);
+        Route::post('delivery', [PortalDeliveryController::class, 'store']);
+        Route::post('delivery/{id}/approve-invoice', [PortalDeliveryController::class, 'approveInvoice']);
     });
 });
