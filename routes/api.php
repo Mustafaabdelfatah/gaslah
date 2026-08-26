@@ -15,6 +15,7 @@ use App\Http\Controllers\API\Global\Notification\NotificationController;
 use App\Http\Controllers\API\Global\Report\ReportController;
 use App\Http\Controllers\API\Global\Setting\SettingController;
 use App\Http\Controllers\API\Global\Setting\TestCredentialsController;
+use App\Http\Controllers\API\Payments\PayController;
 use App\Http\Controllers\API\Portal\PortalAuthController;
 use App\Http\Controllers\API\Portal\PortalController;
 use App\Http\Controllers\API\Portal\PortalDeliveryController;
@@ -83,6 +84,12 @@ Route::get('display/{token}', [DisplayController::class, 'show']);
 Route::get('delivery/photos/{name}', [DeliveryPhotoController::class, 'show'])
     ->name('delivery.photo')
     ->middleware('signed');
+
+// Gaslah — Public payment page (signed pay token) and the Moyasar webhook. The
+// token is the only capability; the amount is recomputed server-side.
+Route::get('pay/{token}', [PayController::class, 'show']);
+Route::post('pay/{token}', [PayController::class, 'pay']);
+Route::post('payments/webhook', [PayController::class, 'webhook']);
 
 Route::middleware(['auth:sanctum'])->group(function () {
     /*
@@ -243,6 +250,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/', [OrderController::class, 'index']);
         Route::get('{order}', [OrderController::class, 'show']);
         Route::patch('{order}/status', [OrderController::class, 'updateStatus']);
+        Route::post('{order}/payment-link', [OrderController::class, 'paymentLink']);
     });
 
     /*

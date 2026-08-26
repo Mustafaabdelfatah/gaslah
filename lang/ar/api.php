@@ -218,6 +218,16 @@ return [
     'branch_not_available' => 'الفرع غير متاح.',
     'delivery_invoice_approved' => 'وافق العميل على الفاتورة',
     'order_not_found' => 'الطلب غير موجود.',
+    'payment_gateway_unreachable' => 'تعذّر الوصول لبوابة الدفع.',
+    'payment_not_for_this_order' => 'عملية الدفع لا تخص هذا الطلب.',
+    'payment_stub_not_allowed' => 'بوابة الدفع التجريبية غير مسموحة في بيئة الإنتاج.',
+    'payment_gateway_not_configured' => 'بوابة الدفع الإلكتروني غير مهيأة.',
+    'payment_used_for_other_order' => 'تم استخدام عملية الدفع لطلب آخر.',
+    'payment_link_invalid' => 'رابط الدفع غير صالح.',
+    'payment_link_expired' => 'انتهت صلاحية رابط الدفع.',
+    'webhook_cancelled_order' => 'وصل ويبهوك لطلب ملغى :order_no — الاسترجاع من البوابة.',
+    'webhook_not_configured' => 'ويبهوك الدفع غير مهيأ.',
+    'webhook_bad_secret' => 'سرّ الويبهوك غير صحيح.',
 
     /*
     |--------------------------------------------------------------------------

@@ -3,18 +3,22 @@
 namespace App\Http\Controllers\API\Tenancy\Orders;
 
 use App\Enum\Orders\OrderStatusEnum;
+use App\Enum\Tenancy\StaffPermissionEnum;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Global\Other\PageRequest;
 use App\Models\Order;
 use App\Services\Orders\OrderStatusService;
+use App\Services\Payments\PayTokenService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rules\Enum;
 
 class OrderController extends TenantController
 {
-    public function __construct(private readonly OrderStatusService $status)
-    {
+    public function __construct(
+        private readonly OrderStatusService $status,
+        private readonly PayTokenService $payTokens,
+    ) {
         parent::__construct();
     }
 
@@ -54,6 +58,27 @@ class OrderController extends TenantController
         $order = $this->status->transition($order, $target, $this->staff()->getKey());
 
         return successResponse($order->load('items', 'payments'), __('api.updated_success'));
+    }
+
+    /**
+     * Mint a public payment link for an unpaid order.
+     */
+    public function paymentLink(Order $order): JsonResponse
+    {
+        $this->requirePermission(StaffPermissionEnum::OrdersManage);
+        $this->assertReadable($order);
+
+        abort_if($order->status === OrderStatusEnum::Cancelled, 422, __('api.order_cancelled'));
+        abort_if($order->remaining() <= 0, 422, __('api.order_fully_paid'));
+
+        $token = $this->payTokens->mint($order->getKey(), time());
+        $path = '/pay/'.$token;
+
+        return successResponse([
+            'token' => $token,
+            'path' => $path,
+            'url' => rtrim((string) config('services.payment.web_url'), '/').$path,
+        ]);
     }
 
     /**

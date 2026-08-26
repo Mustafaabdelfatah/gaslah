@@ -218,6 +218,16 @@ return [
     'branch_not_available' => 'This branch is not available.',
     'delivery_invoice_approved' => 'The customer approved the invoice',
     'order_not_found' => 'The order was not found.',
+    'payment_gateway_unreachable' => 'Could not reach the payment gateway.',
+    'payment_not_for_this_order' => 'This payment transaction does not belong to this order.',
+    'payment_stub_not_allowed' => 'The test payment gateway is not allowed in production.',
+    'payment_gateway_not_configured' => 'The online payment gateway is not configured.',
+    'payment_used_for_other_order' => 'This payment transaction was already used for another order.',
+    'payment_link_invalid' => 'The payment link is invalid.',
+    'payment_link_expired' => 'The payment link has expired.',
+    'webhook_cancelled_order' => 'Webhook received for cancelled order :order_no — refund from the gateway.',
+    'webhook_not_configured' => 'The payment webhook is not configured.',
+    'webhook_bad_secret' => 'Invalid webhook secret.',
 
     /*
     |--------------------------------------------------------------------------

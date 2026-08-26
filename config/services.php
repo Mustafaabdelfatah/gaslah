@@ -35,4 +35,23 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Payment Gateway (Gaslah online payments)
+    |--------------------------------------------------------------------------
+    | driver: null => stub in local/testing, moyasar otherwise. web_url is the
+    | public base a payment link points to.
+    */
+    'payment' => [
+        'driver' => env('PAYMENT_GATEWAY_DRIVER'),
+        'web_url' => env('APP_WEB_URL', env('APP_URL', 'http://localhost')),
+    ],
+
+    'moyasar' => [
+        'secret' => env('MOYASAR_SECRET_KEY'),
+        'publishable' => env('MOYASAR_PUBLISHABLE_KEY'),
+        'webhook_secret' => env('MOYASAR_WEBHOOK_SECRET'),
+        'base_url' => env('MOYASAR_BASE_URL', 'https://api.moyasar.com/v1'),
+    ],
+
 ];
