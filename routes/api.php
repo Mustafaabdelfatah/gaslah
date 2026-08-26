@@ -24,6 +24,8 @@ use App\Http\Controllers\API\Tenancy\Auth\PlatformLoginController;
 use App\Http\Controllers\API\Tenancy\Auth\StaffLoginController;
 use App\Http\Controllers\API\Tenancy\Catalog\CatalogController;
 use App\Http\Controllers\API\Tenancy\Catalog\CustomerController;
+use App\Http\Controllers\API\Tenancy\Orders\OrderController;
+use App\Http\Controllers\API\Tenancy\Orders\PosController;
 use App\Http\Controllers\API\Tenancy\StaffContextController;
 use App\Http\Controllers\API\User\PermissionController;
 use App\Http\Controllers\API\User\RoleController;
@@ -206,5 +208,22 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('{customer}', [CustomerController::class, 'destroy']);
         Route::post('{customer}/wallet/topup', [CustomerController::class, 'walletTopup']);
         Route::get('{customer}/wallet/transactions', [CustomerController::class, 'walletTransactions']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — Orders & POS (staff)
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('pos')->group(function () {
+        Route::post('orders', [PosController::class, 'store']);
+        Route::post('otp/request', [PosController::class, 'otpRequest']);
+        Route::post('otp/verify', [PosController::class, 'otpVerify']);
+    });
+
+    Route::prefix('orders')->group(function () {
+        Route::get('/', [OrderController::class, 'index']);
+        Route::get('{order}', [OrderController::class, 'show']);
+        Route::patch('{order}/status', [OrderController::class, 'updateStatus']);
     });
 });
