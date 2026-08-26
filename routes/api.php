@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\API\Affiliate\AffiliateAuthController;
+use App\Http\Controllers\API\Affiliate\AffiliateController;
 use App\Http\Controllers\API\Auth\LoginController;
 use App\Http\Controllers\API\Auth\LogoutController;
 use App\Http\Controllers\API\Auth\OTPController;
@@ -111,6 +113,23 @@ Route::post('payments/webhook', [PayController::class, 'webhook']);
 // Gaslah — WhatsApp webhook (Meta verify token + HMAC fail-closed).
 Route::get('wa/webhook', [WaWebhookController::class, 'verify']);
 Route::post('wa/webhook', [WaWebhookController::class, 'receive']);
+
+/*
+|--------------------------------------------------------------------------
+| Gaslah — Affiliate surface (phone + OTP, kind=affiliate)
+|--------------------------------------------------------------------------
+*/
+Route::get('r/{code}', [AffiliateAuthController::class, 'landing']);
+Route::prefix('affiliate')->group(function () {
+    Route::post('auth/register', [AffiliateAuthController::class, 'register']);
+    Route::post('auth/request-otp', [AffiliateAuthController::class, 'requestOtp']);
+    Route::post('auth/verify-otp', [AffiliateAuthController::class, 'verifyOtp']);
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('me', [AffiliateController::class, 'me']);
+        Route::get('referrals', [AffiliateController::class, 'referrals']);
+    });
+});
 
 Route::middleware(['auth:sanctum'])->group(function () {
     /*
