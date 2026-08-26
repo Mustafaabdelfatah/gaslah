@@ -240,6 +240,8 @@ return [
     'payout_already_voted' => 'You have already voted on this settlement.',
     'payout_iban_required' => 'A bank IBAN must be configured first.',
     'inventory_unit_not_in_org' => 'The unit does not belong to this organization.',
+    'shift_already_open' => 'You already have an open shift.',
+    'shift_none_open' => 'There is no open shift.',
 
     /*
     |--------------------------------------------------------------------------

@@ -43,6 +43,7 @@ use App\Http\Controllers\API\Tenancy\Payments\PayoutController;
 use App\Http\Controllers\API\Tenancy\Reports\AnalyticsController;
 use App\Http\Controllers\API\Tenancy\Reports\DashboardController;
 use App\Http\Controllers\API\Tenancy\Reports\ReportController as SalesReportController;
+use App\Http\Controllers\API\Tenancy\Reports\ShiftController;
 use App\Http\Controllers\API\Tenancy\StaffContextController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionPlanController;
@@ -372,6 +373,18 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/', [SupplierController::class, 'index']);
         Route::post('/', [SupplierController::class, 'store']);
         Route::put('{supplier}', [SupplierController::class, 'update']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — Shifts (staff, permission: shifts.manage)
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('shifts')->group(function () {
+        Route::get('current', [ShiftController::class, 'current']);
+        Route::get('/', [ShiftController::class, 'index']);
+        Route::post('open', [ShiftController::class, 'open']);
+        Route::post('close', [ShiftController::class, 'close']);
     });
 });
 
