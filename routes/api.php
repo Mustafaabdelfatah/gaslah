@@ -41,6 +41,7 @@ use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
 use App\Http\Controllers\API\Tenancy\Payments\PayoutController;
 use App\Http\Controllers\API\Tenancy\Reports\AnalyticsController;
+use App\Http\Controllers\API\Tenancy\Reports\BankController;
 use App\Http\Controllers\API\Tenancy\Reports\DashboardController;
 use App\Http\Controllers\API\Tenancy\Reports\ReportController as SalesReportController;
 use App\Http\Controllers\API\Tenancy\Reports\ShiftController;
@@ -385,6 +386,18 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/', [ShiftController::class, 'index']);
         Route::post('open', [ShiftController::class, 'open']);
         Route::post('close', [ShiftController::class, 'close']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — Bank Reconciliation (manager, org-level)
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('bank')->group(function () {
+        Route::get('reconciliation', [BankController::class, 'reconciliation']);
+        Route::post('clear', [BankController::class, 'clear']);
+        Route::post('clear-all', [BankController::class, 'clearAll']);
+        Route::post('statement-balance', [BankController::class, 'statementBalance']);
     });
 });
 
