@@ -135,6 +135,11 @@ return [
     'asset_disposal_memo' => 'Asset disposal: :name',
     'asset_already_disposed' => 'This asset has already been disposed.',
     'asset_has_ledger_footprint' => 'An asset with a ledger footprint cannot be deleted — it must be disposed.',
+    'subscription_revenue_memo' => 'Subscription invoice: :plan',
+    'invoice_already_issued' => 'This invoice has already been issued.',
+    'invoice_issue_failed' => 'Could not issue the invoice, please try again.',
+    'invoice_plan_required' => 'A plan is required to invoice this organization.',
+    'invoice_issued_no_delete' => 'An issued invoice cannot be deleted.',
 
     /*
     |--------------------------------------------------------------------------

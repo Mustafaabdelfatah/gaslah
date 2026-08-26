@@ -135,6 +135,11 @@ return [
     'asset_disposal_memo' => 'استبعاد أصل: :name',
     'asset_already_disposed' => 'هذا الأصل مستبعد بالفعل.',
     'asset_has_ledger_footprint' => 'لا يمكن حذف أصل له أثر محاسبي — يجب استبعاده.',
+    'subscription_revenue_memo' => 'فاتورة اشتراك: :plan',
+    'invoice_already_issued' => 'هذه الفاتورة معتمَدة بالفعل.',
+    'invoice_issue_failed' => 'تعذّر اعتماد الفاتورة، يرجى المحاولة مرة أخرى.',
+    'invoice_plan_required' => 'مطلوب خطة لإصدار فاتورة لهذه المنشأة.',
+    'invoice_issued_no_delete' => 'لا يمكن حذف فاتورة معتمَدة.',
 
     /*
     |--------------------------------------------------------------------------

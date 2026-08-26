@@ -1,0 +1,230 @@
+<?php
+
+namespace App\Services\Platform;
+
+use App\Enum\Platform\InvoicePaymentMethodEnum;
+use App\Enum\Platform\PlatformCycleEnum;
+use App\Enum\Platform\SubscriptionInvoiceStatusEnum;
+use App\Models\Organization;
+use App\Models\PlatformPlan;
+use App\Models\PlatformSubscription;
+use App\Models\SubscriptionInvoice;
+use App\Support\Zatca;
+use App\Support\ZatcaPhase2;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\Response;
+
+/**
+ * Two-step ZATCA billing for tenant subscriptions, with the platform as seller.
+ *
+ * A price is treated as VAT-inclusive (tax extracted at 15/115). {@see quote} writes a
+ * freely-deletable draft that holds no chain slot and posts nothing. {@see confirm}, once
+ * the operator has received payment, assigns the next SUB- ICV/PIH slot, freezes the row,
+ * and posts revenue to the platform books — all in one transaction, so an issued invoice
+ * and its journal entry never exist without each other.
+ */
+class SubscriptionInvoicer
+{
+    private const MAX_ATTEMPTS = 8;
+
+    /**
+     * VAT is 15% of the net, i.e. 15/115 of the tax-inclusive total.
+     */
+    private const VAT_NUMERATOR = 15;
+
+    private const VAT_DENOMINATOR = 115;
+
+    public function __construct(
+        private readonly PlatformBooks $books,
+        private readonly PlatformConfigStore $config,
+    ) {}
+
+    /**
+     * Create a DRAFT invoice for a subscription period. No chain slot, no ledger entry.
+     *
+     * @param  array{bank_name?: string|null, transfer_ref?: string|null, gateway_name?: string|null}  $paymentMeta
+     */
+    public function quote(
+        Organization $organization,
+        PlatformPlan $plan,
+        PlatformCycleEnum $cycle,
+        InvoicePaymentMethodEnum $method,
+        array $paymentMeta = [],
+        ?float $manualTotal = null,
+        ?PlatformSubscription $subscription = null,
+        ?int $chargeId = null,
+    ): SubscriptionInvoice {
+        $total = round($manualTotal ?? $this->planPrice($plan, $cycle), 2);
+        $vat = round($total * self::VAT_NUMERATOR / self::VAT_DENOMINATOR, 2);
+        $subtotal = round($total - $vat, 2);
+        $seller = $this->seller();
+
+        return SubscriptionInvoice::query()->create([
+            'organization_id' => $organization->getKey(),
+            'subscription_id' => $subscription?->getKey(),
+            'charge_id' => $chargeId,
+            'seller_name' => $seller['name'],
+            'seller_vat' => $seller['vat'],
+            'buyer_name' => $organization->name,
+            'buyer_vat' => $organization->vat_number,
+            'plan_name' => $plan->name,
+            'cycle' => $cycle->value,
+            'subtotal' => $subtotal,
+            'vat' => $vat,
+            'total' => $total,
+            'payment_method' => $method->value,
+            'bank_name' => $paymentMeta['bank_name'] ?? null,
+            'transfer_ref' => $paymentMeta['transfer_ref'] ?? null,
+            'gateway_name' => $paymentMeta['gateway_name'] ?? null,
+            'status' => SubscriptionInvoiceStatusEnum::Draft->value,
+            'created_at' => Carbon::now(),
+        ]);
+    }
+
+    /**
+     * Confirm a draft: assign the next chain slot, freeze it as ISSUED, and post revenue —
+     * atomically. A concurrent second confirm affects zero rows and is refused with 409.
+     */
+    public function confirm(SubscriptionInvoice $invoice, ?int $adminId = null): SubscriptionInvoice
+    {
+        abort_unless($invoice->isDraft(), Response::HTTP_CONFLICT, __('api.invoice_already_issued'));
+
+        for ($attempt = 0; $attempt < self::MAX_ATTEMPTS; $attempt++) {
+            $last = SubscriptionInvoice::query()->issued()->orderByDesc('icv')->first();
+            $icv = ($last?->icv ?? 0) + 1;
+            $pih = $last?->hash ?? ZatcaPhase2::GENESIS_PIH;
+
+            $seller = $this->seller();
+            $timestamp = Zatca::timestamp(Carbon::now());
+            $canonical = $this->canonical($invoice, $icv, $pih, $timestamp);
+            $hash = ZatcaPhase2::sha256Base64($canonical);
+            $qr = ZatcaPhase2::qrPayloadV2(
+                $seller['name'],
+                (string) $seller['vat'],
+                $timestamp,
+                Zatca::money((float) $invoice->total),
+                Zatca::money((float) $invoice->vat),
+                $hash,
+            );
+
+            try {
+                return DB::transaction(function () use ($invoice, $icv, $pih, $hash, $qr, $adminId) {
+                    $now = Carbon::now();
+
+                    // Compare-and-swap: only a still-draft row is claimed. A second confirm
+                    // (double click, two accountants) updates zero rows and loses the race.
+                    $affected = SubscriptionInvoice::query()
+                        ->whereKey($invoice->getKey())
+                        ->where('status', SubscriptionInvoiceStatusEnum::Draft->value)
+                        ->update([
+                            'icv' => $icv,
+                            'invoice_no' => $icv,
+                            'pih' => $pih,
+                            'hash' => $hash,
+                            'qr' => $qr,
+                            'status' => SubscriptionInvoiceStatusEnum::Issued->value,
+                            'confirmed_at' => $now,
+                            'confirmed_by_id' => $adminId,
+                            'issued_at' => $now,
+                        ]);
+
+                    abort_if($affected === 0, Response::HTTP_CONFLICT, __('api.invoice_already_issued'));
+
+                    $fresh = $invoice->fresh();
+                    $this->books->postRevenue($fresh);
+
+                    return $fresh;
+                });
+            } catch (QueryException $exception) {
+                // A concurrent confirm took this ICV first; recompute and retry.
+                if (! $this->isDuplicateKey($exception) || $attempt >= self::MAX_ATTEMPTS - 1) {
+                    throw $exception;
+                }
+            }
+        }
+
+        abort(Response::HTTP_SERVICE_UNAVAILABLE, __('api.invoice_issue_failed'));
+    }
+
+    /**
+     * Quote + confirm in one call, for historical backfill only (no draft stage). Wrapped
+     * so a confirm failure rolls the orphan draft back too.
+     */
+    public function issue(
+        Organization $organization,
+        PlatformPlan $plan,
+        PlatformCycleEnum $cycle,
+        InvoicePaymentMethodEnum $method,
+        array $paymentMeta = [],
+        ?float $manualTotal = null,
+        ?PlatformSubscription $subscription = null,
+        ?int $chargeId = null,
+        ?int $adminId = null,
+    ): SubscriptionInvoice {
+        return DB::transaction(function () use ($organization, $plan, $cycle, $method, $paymentMeta, $manualTotal, $subscription, $chargeId, $adminId) {
+            $draft = $this->quote($organization, $plan, $cycle, $method, $paymentMeta, $manualTotal, $subscription, $chargeId);
+
+            return $this->confirm($draft, $adminId);
+        });
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Helper Methods
+    |--------------------------------------------------------------------------
+    */
+
+    private function planPrice(PlatformPlan $plan, PlatformCycleEnum $cycle): float
+    {
+        return (float) ($cycle === PlatformCycleEnum::Yearly ? $plan->yearly_price : $plan->monthly_price);
+    }
+
+    /**
+     * A deterministic canonical string over the invoice's tax-relevant fields — the input
+     * to the chained hash.
+     */
+    private function canonical(SubscriptionInvoice $invoice, int $icv, string $pih, string $timestamp): string
+    {
+        $seller = $this->seller();
+
+        return implode('|', [
+            'SUB',
+            $icv,
+            $pih,
+            $timestamp,
+            $seller['name'],
+            (string) $seller['vat'],
+            (string) $invoice->buyer_name,
+            (string) $invoice->buyer_vat,
+            (string) $invoice->plan_name,
+            $invoice->cycle instanceof PlatformCycleEnum ? $invoice->cycle->value : (string) $invoice->cycle,
+            Zatca::money((float) $invoice->subtotal),
+            Zatca::money((float) $invoice->vat),
+            Zatca::money((float) $invoice->total),
+        ]);
+    }
+
+    /**
+     * The seller identity (the SaaS operator), read from the platform config with env
+     * fallbacks.
+     *
+     * @return array{name: string, vat: string|null}
+     */
+    private function seller(): array
+    {
+        $platform = $this->config->get('platform', []);
+        $platform = is_array($platform) ? $platform : [];
+
+        return [
+            'name' => (string) ($platform['sellerName'] ?? config('app.name', 'Gaslah')),
+            'vat' => $platform['sellerVat'] ?? config('services.platform.seller_vat'),
+        ];
+    }
+
+    private function isDuplicateKey(QueryException $exception): bool
+    {
+        return in_array($exception->getCode(), ['23000', '23505'], true);
+    }
+}

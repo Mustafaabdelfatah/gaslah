@@ -21,6 +21,7 @@ use App\Http\Controllers\API\Global\Setting\TestCredentialsController;
 use App\Http\Controllers\API\Messaging\WaWebhookController;
 use App\Http\Controllers\API\Payments\PayController;
 use App\Http\Controllers\API\Platform\AdminAnnouncementController;
+use App\Http\Controllers\API\Platform\AdminInvoiceController;
 use App\Http\Controllers\API\Platform\AdminPayoutController;
 use App\Http\Controllers\API\Platform\AdminPlanController;
 use App\Http\Controllers\API\Platform\AdminSubscriptionController;
@@ -527,6 +528,13 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::put('tenants/{organization}/subscription', [AdminSubscriptionController::class, 'update']);
     Route::post('tenants/{organization}/start-trial', [AdminSubscriptionController::class, 'startTrial']);
     Route::post('tenants/{organization}/extend', [AdminSubscriptionController::class, 'extend']);
+
+    // Subscription billing — two-step ZATCA invoicing.
+    Route::get('invoices', [AdminInvoiceController::class, 'index']);
+    Route::get('invoices/{invoice}', [AdminInvoiceController::class, 'show']);
+    Route::post('tenants/{organization}/invoices', [AdminInvoiceController::class, 'store']);
+    Route::post('invoices/{invoice}/confirm', [AdminInvoiceController::class, 'confirm']);
+    Route::delete('invoices/{invoice}', [AdminInvoiceController::class, 'destroy']);
 });
 
 Route::middleware('auth:sanctum')->prefix('admin/payouts')->group(function () {

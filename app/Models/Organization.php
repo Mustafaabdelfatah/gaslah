@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Scopes\Tenancy\OrganizationScopes;
+use App\Services\Platform\PlatformBooks;
+use App\Services\Platform\PlatformConfigStore;
 use App\Trait\Global\LogsActivityOptions;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -96,9 +98,26 @@ class Organization extends BaseModel
      */
     public function isPlatformOrg(): bool
     {
-        $reservedId = config('services.platform.books_org_id');
+        $reservedId = self::reservedBooksOrgId();
 
-        return $reservedId !== null && (int) $reservedId === (int) $this->getKey();
+        return $reservedId !== null && $reservedId === (int) $this->getKey();
+    }
+
+    /**
+     * The id of the reserved platform-books organization: the persisted value set by
+     * {@see PlatformBooks}, or a static env fallback.
+     */
+    public static function reservedBooksOrgId(): ?int
+    {
+        $stored = app(PlatformConfigStore::class)->platformBooksOrgId();
+
+        if ($stored !== null) {
+            return $stored;
+        }
+
+        $configured = config('services.platform.books_org_id');
+
+        return $configured === null ? null : (int) $configured;
     }
 
     /*
@@ -114,9 +133,9 @@ class Organization extends BaseModel
      */
     public function scopeTenantsOnly(Builder $query): Builder
     {
-        $reservedId = config('services.platform.books_org_id');
+        $reservedId = self::reservedBooksOrgId();
 
-        return $reservedId === null ? $query : $query->whereKeyNot((int) $reservedId);
+        return $reservedId === null ? $query : $query->whereKeyNot($reservedId);
     }
 
     /*
