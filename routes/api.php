@@ -24,6 +24,7 @@ use App\Http\Controllers\API\Platform\AdminPayoutController;
 use App\Http\Controllers\API\Platform\AdminPlanController;
 use App\Http\Controllers\API\Platform\AdminSubscriptionController;
 use App\Http\Controllers\API\Platform\AdminTenantController;
+use App\Http\Controllers\API\Platform\PlatformStatsController;
 use App\Http\Controllers\API\Portal\PortalAuthController;
 use App\Http\Controllers\API\Portal\PortalController;
 use App\Http\Controllers\API\Portal\PortalDeliveryController;
@@ -501,6 +502,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
+    Route::get('stats', [PlatformStatsController::class, 'index']);
+
     Route::get('plans', [AdminPlanController::class, 'index']);
     Route::post('plans', [AdminPlanController::class, 'store']);
     Route::put('plans/{plan}', [AdminPlanController::class, 'update']);
