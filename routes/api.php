@@ -34,6 +34,8 @@ use App\Http\Controllers\API\Tenancy\Auth\PlatformLoginController;
 use App\Http\Controllers\API\Tenancy\Auth\StaffLoginController;
 use App\Http\Controllers\API\Tenancy\Catalog\CatalogController;
 use App\Http\Controllers\API\Tenancy\Catalog\CustomerController;
+use App\Http\Controllers\API\Tenancy\Community\CommunityController;
+use App\Http\Controllers\API\Tenancy\Community\ForumController;
 use App\Http\Controllers\API\Tenancy\Delivery\DeliveryController;
 use App\Http\Controllers\API\Tenancy\Delivery\DeliveryPhotoController;
 use App\Http\Controllers\API\Tenancy\Delivery\DisplayController;
@@ -409,6 +411,20 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // framework's user-notifications route).
     Route::get('alerts', [AlertsController::class, 'index']);
     Route::get('notifications-log', [NotificationLogController::class, 'index']);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — Community forum (staff, platform-wide)
+    |--------------------------------------------------------------------------
+    */
+    Route::get('community', [CommunityController::class, 'feed']);
+    Route::prefix('forum')->group(function () {
+        Route::get('categories', [ForumController::class, 'categories']);
+        Route::get('threads', [ForumController::class, 'threads']);
+        Route::get('threads/{thread}', [ForumController::class, 'show']);
+        Route::post('threads', [ForumController::class, 'storeThread']);
+        Route::post('threads/{thread}/posts', [ForumController::class, 'storePost']);
+    });
 
     // Organization announcements (portal carousel; writes manager-gated).
     Route::prefix('announcements')->group(function () {

@@ -255,6 +255,10 @@ return [
     'wa_send_failed' => 'Message delivery failed.',
     'wa_webhook_not_configured' => 'The WhatsApp webhook is not configured.',
     'wa_webhook_bad_signature' => 'Invalid webhook signature.',
+    'forum_category_invalid' => 'The category does not exist or is not active.',
+    'forum_pending_limit' => 'You have too many threads awaiting review.',
+    'forum_thread_pending' => 'Your thread is awaiting moderator approval.',
+    'forum_thread_closed' => 'This thread is closed.',
 
     /*
     |--------------------------------------------------------------------------
