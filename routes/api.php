@@ -22,6 +22,8 @@ use App\Http\Controllers\API\Tenancy\Accounting\ExpenseController;
 use App\Http\Controllers\API\Tenancy\Accounting\JournalController;
 use App\Http\Controllers\API\Tenancy\Auth\PlatformLoginController;
 use App\Http\Controllers\API\Tenancy\Auth\StaffLoginController;
+use App\Http\Controllers\API\Tenancy\Catalog\CatalogController;
+use App\Http\Controllers\API\Tenancy\Catalog\CustomerController;
 use App\Http\Controllers\API\Tenancy\StaffContextController;
 use App\Http\Controllers\API\User\PermissionController;
 use App\Http\Controllers\API\User\RoleController;
@@ -179,5 +181,30 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('{asset}/depreciate', [AssetController::class, 'depreciate']);
         Route::post('{asset}/dispose', [AssetController::class, 'dispose']);
         Route::delete('{asset}', [AssetController::class, 'destroy']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — Catalog & Customers (staff)
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('catalog')->group(function () {
+        Route::get('/', [CatalogController::class, 'index']);
+        Route::post('categories', [CatalogController::class, 'storeCategory']);
+        Route::put('categories/reorder', [CatalogController::class, 'reorderCategories']);
+        Route::post('products', [CatalogController::class, 'storeProduct']);
+        Route::patch('products/{product}', [CatalogController::class, 'updateProduct']);
+        Route::patch('products/{product}/code', [CatalogController::class, 'updateProductCode']);
+        Route::put('services/{service}', [CatalogController::class, 'updateService']);
+    });
+
+    Route::prefix('customers')->group(function () {
+        Route::get('/', [CustomerController::class, 'index']);
+        Route::post('/', [CustomerController::class, 'store']);
+        Route::get('{customer}', [CustomerController::class, 'show']);
+        Route::put('{customer}', [CustomerController::class, 'update']);
+        Route::delete('{customer}', [CustomerController::class, 'destroy']);
+        Route::post('{customer}/wallet/topup', [CustomerController::class, 'walletTopup']);
+        Route::get('{customer}/wallet/transactions', [CustomerController::class, 'walletTransactions']);
     });
 });
