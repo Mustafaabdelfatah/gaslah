@@ -24,6 +24,7 @@ use App\Http\Controllers\API\Tenancy\Auth\PlatformLoginController;
 use App\Http\Controllers\API\Tenancy\Auth\StaffLoginController;
 use App\Http\Controllers\API\Tenancy\Catalog\CatalogController;
 use App\Http\Controllers\API\Tenancy\Catalog\CustomerController;
+use App\Http\Controllers\API\Tenancy\Loyalty\LoyaltyController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
 use App\Http\Controllers\API\Tenancy\StaffContextController;
@@ -245,4 +246,19 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/', [SubscriptionController::class, 'store']);
         Route::post('{subscription}/pay', [SubscriptionController::class, 'pay']);
     });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — Loyalty (staff, feature: loyalty)
+    |--------------------------------------------------------------------------
+    */
+    Route::prefix('loyalty')->group(function () {
+        Route::get('program', [LoyaltyController::class, 'program']);
+        Route::put('program', [LoyaltyController::class, 'updateProgram']);
+        Route::get('accounts', [LoyaltyController::class, 'accounts']);
+        Route::post('accounts/{customer}/adjust', [LoyaltyController::class, 'adjust']);
+    });
+
+    // Redeem points for wallet value — customer-scoped path per the spec.
+    Route::post('customers/{customer}/loyalty/redeem', [LoyaltyController::class, 'redeem']);
 });

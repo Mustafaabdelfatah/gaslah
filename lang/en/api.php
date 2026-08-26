@@ -182,6 +182,13 @@ return [
     'subscription_collected' => 'The subscription was collected successfully.',
     'subscription_payment_memo' => 'Subscription payment: :name',
     'subscription_consume_memo' => 'Subscription consumption for cart :order_no',
+    'loyalty_program_not_active' => 'No loyalty programme is active.',
+    'loyalty_insufficient_points' => 'Insufficient points.',
+    'loyalty_point_value_missing' => 'The point value is not set in the loyalty programme.',
+    'loyalty_redeem_value_zero' => 'The redemption value is zero.',
+    'loyalty_manual_adjustment' => 'Manual points adjustment',
+    'loyalty_redeem_note' => 'Points redeemed for wallet value',
+    'loyalty_redeem_wallet_memo' => 'Redeemed :points loyalty points',
 
     /*
     |--------------------------------------------------------------------------

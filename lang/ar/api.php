@@ -182,6 +182,13 @@ return [
     'subscription_collected' => 'تم تحصيل الاشتراك بنجاح.',
     'subscription_payment_memo' => 'دفع اشتراك: :name',
     'subscription_consume_memo' => 'استهلاك اشتراك للسلة :order_no',
+    'loyalty_program_not_active' => 'لا يوجد برنامج ولاء مفعّل.',
+    'loyalty_insufficient_points' => 'النقاط غير كافية.',
+    'loyalty_point_value_missing' => 'قيمة النقطة غير محددة في برنامج الولاء.',
+    'loyalty_redeem_value_zero' => 'قيمة الاستبدال صفر.',
+    'loyalty_manual_adjustment' => 'تعديل يدوي للنقاط',
+    'loyalty_redeem_note' => 'استبدال نقاط برصيد محفظة',
+    'loyalty_redeem_wallet_memo' => 'استبدال :points نقطة ولاء',
 
     /*
     |--------------------------------------------------------------------------
