@@ -215,6 +215,7 @@ return [
     'delivery_accept_first' => 'يلزم قبول الطلب أولاً.',
     'delivery_pickup_photo_required' => 'يلزم إرفاق صورة الاستلام.',
     'delivery_invalid_image' => 'الصورة غير صالحة.',
+    'branch_not_available' => 'الفرع غير متاح.',
 
     /*
     |--------------------------------------------------------------------------

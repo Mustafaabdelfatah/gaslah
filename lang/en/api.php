@@ -215,6 +215,7 @@ return [
     'delivery_accept_first' => 'The request must be accepted first.',
     'delivery_pickup_photo_required' => 'A pickup proof photo is required.',
     'delivery_invalid_image' => 'The image is invalid.',
+    'branch_not_available' => 'This branch is not available.',
 
     /*
     |--------------------------------------------------------------------------

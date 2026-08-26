@@ -27,6 +27,8 @@ use App\Http\Controllers\API\Tenancy\Auth\StaffLoginController;
 use App\Http\Controllers\API\Tenancy\Catalog\CatalogController;
 use App\Http\Controllers\API\Tenancy\Catalog\CustomerController;
 use App\Http\Controllers\API\Tenancy\Delivery\DeliveryController;
+use App\Http\Controllers\API\Tenancy\Delivery\DeliveryPhotoController;
+use App\Http\Controllers\API\Tenancy\Delivery\DisplayController;
 use App\Http\Controllers\API\Tenancy\Loyalty\LoyaltyController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
@@ -71,6 +73,13 @@ Route::post('platform/auth/login', PlatformLoginController::class);
 Route::post('send-otp', [OTPController::class, 'send']);
 Route::post('check-otp', [OTPController::class, 'check']);
 Route::post('verify-otp', [OTPController::class, 'verify']);
+
+// Gaslah — Delivery public surfaces: the in-store display board (signed branch
+// token) and proof photos (time-limited signed URL).
+Route::get('display/{token}', [DisplayController::class, 'show']);
+Route::get('delivery/photos/{name}', [DeliveryPhotoController::class, 'show'])
+    ->name('delivery.photo')
+    ->middleware('signed');
 
 Route::middleware(['auth:sanctum'])->group(function () {
     /*
@@ -291,6 +300,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('requests/{delivery}/action', [DeliveryController::class, 'requestAction']);
         Route::post('requests/{delivery}/inventory', [DeliveryController::class, 'inventory']);
     });
+
+    // Mint an in-store display link for a branch.
+    Route::post('display/token', [DisplayController::class, 'token']);
 });
 
 /*

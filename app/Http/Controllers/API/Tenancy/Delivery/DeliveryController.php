@@ -21,6 +21,7 @@ use App\Services\Delivery\DeliveryService;
 use App\Services\Delivery\DeliverySettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\Rules\Enum;
 
 class DeliveryController extends TenantController
@@ -194,7 +195,11 @@ class DeliveryController extends TenantController
         $this->requireFeature(self::FEATURE);
         $this->assertOwnedRequest($delivery);
 
-        return successResponse($delivery->load('customer', 'driver', 'order', 'zone', 'history'));
+        $data = $delivery->load('customer', 'driver', 'order', 'zone', 'history')->toArray();
+        $data['pickup_photo_signed_url'] = $this->signedPhotoUrl($delivery->pickup_photo_url);
+        $data['delivery_photo_signed_url'] = $this->signedPhotoUrl($delivery->delivery_photo_url);
+
+        return successResponse($data);
     }
 
     public function storeRequest(StoreDeliveryRequestRequest $request): JsonResponse
@@ -321,6 +326,18 @@ class DeliveryController extends TenantController
     private function assertOwnedRequest(DeliveryRequest $delivery): void
     {
         abort_unless(in_array($delivery->branch_id, $this->readBranchIds(), true), 404, __('api.record_not_found'));
+    }
+
+    /**
+     * A 12-hour signed URL for a stored proof photo (the signature is the authorization).
+     */
+    private function signedPhotoUrl(?string $name): ?string
+    {
+        if ($name === null) {
+            return null;
+        }
+
+        return URL::temporarySignedRoute('delivery.photo', now()->addHours(12), ['name' => $name]);
     }
 
     private function ownedCustomer(int $customerId): Customer
