@@ -42,6 +42,7 @@ use App\Http\Controllers\API\Tenancy\Messaging\AlertsController;
 use App\Http\Controllers\API\Tenancy\Messaging\NotificationLogController;
 use App\Http\Controllers\API\Tenancy\Messaging\OrgAnnouncementController;
 use App\Http\Controllers\API\Tenancy\Messaging\WaController;
+use App\Http\Controllers\API\Tenancy\Orders\AutomationController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
 use App\Http\Controllers\API\Tenancy\Payments\PayoutController;
@@ -265,6 +266,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('otp/request', [PosController::class, 'otpRequest']);
         Route::post('otp/verify', [PosController::class, 'otpVerify']);
     });
+
+    // Order auto-advance automation settings.
+    Route::get('automation', [AutomationController::class, 'show']);
+    Route::put('automation', [AutomationController::class, 'update']);
 
     Route::prefix('orders')->group(function () {
         Route::get('/', [OrderController::class, 'index']);
