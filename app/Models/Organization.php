@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Scopes\Tenancy\OrganizationScopes;
 use App\Trait\Global\LogsActivityOptions;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -87,6 +88,35 @@ class Organization extends BaseModel
     public function isArchived(): bool
     {
         return $this->archived_at !== null;
+    }
+
+    /**
+     * Whether this organization is the reserved one that holds the platform's own books
+     * (never billed, never listed in the tenant directory).
+     */
+    public function isPlatformOrg(): bool
+    {
+        $reservedId = config('services.platform.books_org_id');
+
+        return $reservedId !== null && (int) $reservedId === (int) $this->getKey();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Scopes methods
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Exclude the reserved platform-books organization from any tenant-facing list or
+     * count. Not a global scope — a lookup by id still returns it, since the platform's
+     * own accounting needs it.
+     */
+    public function scopeTenantsOnly(Builder $query): Builder
+    {
+        $reservedId = config('services.platform.books_org_id');
+
+        return $reservedId === null ? $query : $query->whereKeyNot((int) $reservedId);
     }
 
     /*

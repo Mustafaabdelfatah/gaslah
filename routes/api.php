@@ -23,6 +23,7 @@ use App\Http\Controllers\API\Payments\PayController;
 use App\Http\Controllers\API\Platform\AdminPayoutController;
 use App\Http\Controllers\API\Platform\AdminPlanController;
 use App\Http\Controllers\API\Platform\AdminSubscriptionController;
+use App\Http\Controllers\API\Platform\AdminTenantController;
 use App\Http\Controllers\API\Portal\PortalAuthController;
 use App\Http\Controllers\API\Portal\PortalController;
 use App\Http\Controllers\API\Portal\PortalDeliveryController;
@@ -503,6 +504,11 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::get('plans', [AdminPlanController::class, 'index']);
     Route::post('plans', [AdminPlanController::class, 'store']);
     Route::put('plans/{plan}', [AdminPlanController::class, 'update']);
+
+    Route::get('tenants', [AdminTenantController::class, 'index']);
+    Route::get('tenants/{organization}', [AdminTenantController::class, 'show']);
+    Route::post('tenants/{organization}/suspend', [AdminTenantController::class, 'suspend']);
+    Route::patch('tenants/{organization}/entitlements', [AdminTenantController::class, 'updateEntitlements']);
 
     Route::put('tenants/{organization}/subscription', [AdminSubscriptionController::class, 'update']);
     Route::post('tenants/{organization}/start-trial', [AdminSubscriptionController::class, 'startTrial']);
