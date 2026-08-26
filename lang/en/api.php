@@ -154,6 +154,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Orders & POS & OTP
+    |--------------------------------------------------------------------------
+    */
+    'customer_has_no_phone' => 'This customer has no phone number.',
+    'otp_service_unavailable' => 'The verification code service is not configured.',
+    'otp_max_attempts' => 'The allowed number of attempts has been exceeded.',
+    'otp_consent_required' => 'Customer OTP verification is required before a wallet debit.',
+    'payment_not_confirmed' => 'The payment has not been confirmed.',
+    'payment_terminal_reference_required' => 'No network transaction reference received — the payment is rejected.',
+    'amount_received_invalid' => 'The amount received is invalid.',
+    'order_service_not_found' => 'One of the requested services was not found.',
+    'order_items_required' => 'At least one order line is required.',
+    'order_number_generation_failed' => 'Could not generate the order number — please retry.',
+    'order_cancelled' => 'The order is cancelled.',
+    'order_fully_paid' => 'The order is fully paid.',
+    'invalid_status_transition' => 'This status transition is not allowed.',
+    'order_sale_memo' => 'Sale for cart :order_no',
+    'order_reversal_memo' => 'Credit note — cancellation of cart :order_no',
+    'no_active_subscription' => 'The customer has no active subscription.',
+    'subscription_not_paid' => 'The subscription is not paid — it must be collected first.',
+    'subscription_quota_insufficient' => 'Insufficient subscription piece quota (remaining: :remaining).',
+    'subscription_balance_insufficient' => 'Insufficient subscription balance (remaining: :remaining).',
+
+    /*
+    |--------------------------------------------------------------------------
     | Users
     |--------------------------------------------------------------------------
     */

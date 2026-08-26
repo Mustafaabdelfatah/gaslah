@@ -154,6 +154,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Orders & POS & OTP
+    |--------------------------------------------------------------------------
+    */
+    'customer_has_no_phone' => 'لا يوجد رقم هاتف لهذا العميل.',
+    'otp_service_unavailable' => 'خدمة رمز التحقق غير مُهيأة.',
+    'otp_max_attempts' => 'تم تجاوز عدد المحاولات المسموح بها.',
+    'otp_consent_required' => 'يلزم تحقق العميل برمز OTP قبل الخصم من المحفظة.',
+    'payment_not_confirmed' => 'لم يتم تأكيد الدفع.',
+    'payment_terminal_reference_required' => 'لم يتم استلام رمز عملية الشبكة — الدفع مرفوض.',
+    'amount_received_invalid' => 'المبلغ المستلم غير صالح.',
+    'order_service_not_found' => 'إحدى الخدمات المطلوبة غير موجودة.',
+    'order_items_required' => 'مطلوب بند واحد على الأقل في الطلب.',
+    'order_number_generation_failed' => 'تعذّر توليد رقم الطلب — أعد المحاولة.',
+    'order_cancelled' => 'الطلب ملغي.',
+    'order_fully_paid' => 'الطلب مسدَّد بالكامل.',
+    'invalid_status_transition' => 'انتقال حالة غير مسموح به.',
+    'order_sale_memo' => 'مبيعات سلة :order_no',
+    'order_reversal_memo' => 'إشعار دائن — إلغاء سلة :order_no',
+    'no_active_subscription' => 'لا يوجد اشتراك فعّال للعميل.',
+    'subscription_not_paid' => 'الاشتراك غير مدفوع — يلزم تحصيله أولاً.',
+    'subscription_quota_insufficient' => 'رصيد قطع الاشتراك غير كافٍ (المتبقي: :remaining).',
+    'subscription_balance_insufficient' => 'رصيد الاشتراك غير كافٍ (المتبقي: :remaining).',
+
+    /*
+    |--------------------------------------------------------------------------
     | Users
     |--------------------------------------------------------------------------
     */
