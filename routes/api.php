@@ -20,6 +20,8 @@ use App\Http\Controllers\API\Global\Setting\TestCredentialsController;
 use App\Http\Controllers\API\Messaging\WaWebhookController;
 use App\Http\Controllers\API\Payments\PayController;
 use App\Http\Controllers\API\Platform\AdminPayoutController;
+use App\Http\Controllers\API\Platform\AdminPlanController;
+use App\Http\Controllers\API\Platform\AdminSubscriptionController;
 use App\Http\Controllers\API\Portal\PortalAuthController;
 use App\Http\Controllers\API\Portal\PortalController;
 use App\Http\Controllers\API\Portal\PortalDeliveryController;
@@ -50,6 +52,7 @@ use App\Http\Controllers\API\Tenancy\Orders\AutomationController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
 use App\Http\Controllers\API\Tenancy\Payments\PayoutController;
+use App\Http\Controllers\API\Tenancy\Platform\OrgSubscriptionController;
 use App\Http\Controllers\API\Tenancy\Reports\AnalyticsController;
 use App\Http\Controllers\API\Tenancy\Reports\BankController;
 use App\Http\Controllers\API\Tenancy\Reports\DashboardController;
@@ -417,6 +420,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     | Gaslah — Community forum (staff, platform-wide)
     |--------------------------------------------------------------------------
     */
+    // Organization's own platform subscription view.
+    Route::get('org/entitlements', [OrgSubscriptionController::class, 'entitlements']);
+    Route::get('org/subscription', [OrgSubscriptionController::class, 'subscription']);
+
     Route::get('community', [CommunityController::class, 'feed']);
     Route::prefix('forum')->group(function () {
         Route::get('categories', [ForumController::class, 'categories']);
@@ -483,6 +490,21 @@ Route::middleware(['auth:sanctum'])->group(function () {
 | Gaslah — Payout settlements (platform admin, maker-checker)
 |--------------------------------------------------------------------------
 */
+/*
+|--------------------------------------------------------------------------
+| Gaslah — Platform admin console (kind=platform, live DB permission checks)
+|--------------------------------------------------------------------------
+*/
+Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
+    Route::get('plans', [AdminPlanController::class, 'index']);
+    Route::post('plans', [AdminPlanController::class, 'store']);
+    Route::put('plans/{plan}', [AdminPlanController::class, 'update']);
+
+    Route::put('tenants/{organization}/subscription', [AdminSubscriptionController::class, 'update']);
+    Route::post('tenants/{organization}/start-trial', [AdminSubscriptionController::class, 'startTrial']);
+    Route::post('tenants/{organization}/extend', [AdminSubscriptionController::class, 'extend']);
+});
+
 Route::middleware('auth:sanctum')->prefix('admin/payouts')->group(function () {
     Route::get('/', [AdminPayoutController::class, 'index']);
     Route::post('/', [AdminPayoutController::class, 'store']);

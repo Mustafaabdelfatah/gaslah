@@ -7,6 +7,7 @@ use App\Trait\Global\LogsActivityOptions;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 /**
@@ -96,5 +97,10 @@ class Organization extends BaseModel
     public function branches(): HasMany
     {
         return $this->hasMany(Branch::class);
+    }
+
+    public function platformSubscription(): HasOne
+    {
+        return $this->hasOne(PlatformSubscription::class);
     }
 }

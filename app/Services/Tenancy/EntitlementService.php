@@ -39,12 +39,22 @@ class EntitlementService
     {
         $catalogue = $this->catalogue();
 
-        // A suspended account is readable but inert: only the base product survives.
+        // A suspended or lapsed account is readable but inert: only the base product survives.
         if (! $this->isActive($organization)) {
             return $catalogue->where('is_core', true)->pluck('key')->all();
         }
 
-        $enabled = $catalogue->pluck('key')->all();
+        $subscription = $organization->platformSubscription;
+
+        // A plan drives the enabled features; an organization with no subscription is
+        // grandfathered to the full catalogue (BRD rule 2).
+        if ($subscription !== null) {
+            $planKeys = $subscription->plan?->feature_keys ?? [];
+            $coreKeys = $catalogue->where('is_core', true)->pluck('key')->all();
+            $enabled = array_values(array_unique([...$coreKeys, ...$planKeys]));
+        } else {
+            $enabled = $catalogue->pluck('key')->all();
+        }
 
         return $this->applyOverrides($organization, $enabled);
     }
@@ -69,7 +79,15 @@ class EntitlementService
      */
     public function isActive(Organization $organization): bool
     {
-        return ! $organization->is_suspended && ! $organization->isArchived();
+        if ($organization->is_suspended || $organization->isArchived()) {
+            return false;
+        }
+
+        // A subscription, once present, must be live (writable status and within its
+        // period). No subscription row means grandfathered — fully active.
+        $subscription = $organization->platformSubscription;
+
+        return $subscription === null || $subscription->isLive();
     }
 
     /**
@@ -87,12 +105,16 @@ class EntitlementService
 
     public function maxBranches(Organization $organization): int
     {
-        return $organization->max_branches_override ?? self::UNLIMITED;
+        return $organization->max_branches_override
+            ?? $organization->platformSubscription?->plan?->max_branches
+            ?? self::UNLIMITED;
     }
 
     public function maxUsers(Organization $organization): int
     {
-        return $organization->max_users_override ?? self::UNLIMITED;
+        return $organization->max_users_override
+            ?? $organization->platformSubscription?->plan?->max_users
+            ?? self::UNLIMITED;
     }
 
     public function usedBranches(Organization $organization): int
