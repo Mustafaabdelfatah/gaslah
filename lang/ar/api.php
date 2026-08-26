@@ -130,6 +130,11 @@ return [
     'period_locked' => 'الفترة المحاسبية مقفلة لهذا التاريخ — لا يمكن الترحيل فيها.',
     'expense_memo' => 'مصروف: :category — :description',
     'expense_reversal_memo' => 'عكس مصروف',
+    'asset_acquisition_memo' => 'اقتناء أصل: :name',
+    'asset_depreciation_memo' => 'إهلاك أصل: :name — :period',
+    'asset_disposal_memo' => 'استبعاد أصل: :name',
+    'asset_already_disposed' => 'هذا الأصل مستبعد بالفعل.',
+    'asset_has_ledger_footprint' => 'لا يمكن حذف أصل له أثر محاسبي — يجب استبعاده.',
 
     /*
     |--------------------------------------------------------------------------

@@ -130,6 +130,11 @@ return [
     'period_locked' => 'The accounting period is locked for this date — posting is not allowed.',
     'expense_memo' => 'Expense: :category — :description',
     'expense_reversal_memo' => 'Expense reversal',
+    'asset_acquisition_memo' => 'Asset acquisition: :name',
+    'asset_depreciation_memo' => 'Asset depreciation: :name — :period',
+    'asset_disposal_memo' => 'Asset disposal: :name',
+    'asset_already_disposed' => 'This asset has already been disposed.',
+    'asset_has_ledger_footprint' => 'An asset with a ledger footprint cannot be deleted — it must be disposed.',
 
     /*
     |--------------------------------------------------------------------------
