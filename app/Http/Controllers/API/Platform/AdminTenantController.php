@@ -8,7 +8,9 @@ use App\Enum\Tenancy\PlatformPermissionEnum;
 use App\Models\Feature;
 use App\Models\Order;
 use App\Models\Organization;
+use App\Models\PlatformAuditLog;
 use App\Models\PlatformEvent;
+use App\Models\User;
 use App\Services\Platform\PlatformAuditService;
 use App\Services\Tenancy\EntitlementService;
 use Illuminate\Database\Eloquent\Builder;
@@ -29,6 +31,47 @@ class AdminTenantController extends PlatformBaseController
         private readonly PlatformAuditService $audit,
     ) {
         parent::__construct();
+    }
+
+    /**
+     * The platform-admin audit trail, newest first — optionally scoped to one tenant.
+     */
+    public function activity(Request $request): JsonResponse
+    {
+        $this->requirePlatformPermission(PlatformPermissionEnum::ManageTenants);
+
+        $logs = PlatformAuditLog::query()
+            ->with(['admin:id,name', 'organization:id,name'])
+            ->when($request->filled('organization_id'), fn (Builder $q) => $q->where('organization_id', $request->integer('organization_id')))
+            ->latest('created_at')
+            ->paginate(30);
+
+        return successResponse($logs);
+    }
+
+    /**
+     * The staff of a single tenant with their branch role.
+     */
+    public function users(Organization $organization): JsonResponse
+    {
+        $this->requirePlatformPermission(PlatformPermissionEnum::ManageTenants);
+
+        $branchIds = $organization->branches()->pluck('id');
+
+        $users = User::query()
+            ->whereHas('branches', fn (Builder $q) => $q->whereIn('branches.id', $branchIds))
+            ->with(['branches' => fn ($q) => $q->whereIn('branches.id', $branchIds)])
+            ->get(['id', 'name', 'email', 'phone', 'is_active'])
+            ->map(fn (User $user) => [
+                'id' => $user->getKey(),
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'is_active' => (bool) $user->is_active,
+                'roles' => $user->branches->pluck('pivot.role')->unique()->values(),
+            ]);
+
+        return successResponse($users);
     }
 
     public function index(Request $request): JsonResponse

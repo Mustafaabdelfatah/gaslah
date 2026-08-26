@@ -20,6 +20,7 @@ use App\Http\Controllers\API\Global\Setting\SettingController;
 use App\Http\Controllers\API\Global\Setting\TestCredentialsController;
 use App\Http\Controllers\API\Messaging\WaWebhookController;
 use App\Http\Controllers\API\Payments\PayController;
+use App\Http\Controllers\API\Platform\AdminAnnouncementController;
 use App\Http\Controllers\API\Platform\AdminPayoutController;
 use App\Http\Controllers\API\Platform\AdminPlanController;
 use App\Http\Controllers\API\Platform\AdminSubscriptionController;
@@ -55,6 +56,7 @@ use App\Http\Controllers\API\Tenancy\Orders\AutomationController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
 use App\Http\Controllers\API\Tenancy\Payments\PayoutController;
+use App\Http\Controllers\API\Tenancy\Platform\OrgNoticeController;
 use App\Http\Controllers\API\Tenancy\Platform\OrgSubscriptionController;
 use App\Http\Controllers\API\Tenancy\Reports\AnalyticsController;
 use App\Http\Controllers\API\Tenancy\Reports\BankController;
@@ -429,6 +431,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Organization's own platform subscription view.
     Route::get('org/entitlements', [OrgSubscriptionController::class, 'entitlements']);
     Route::get('org/subscription', [OrgSubscriptionController::class, 'subscription']);
+    Route::get('org/notices', [OrgNoticeController::class, 'index']);
 
     Route::get('community', [CommunityController::class, 'feed']);
     Route::prefix('forum')->group(function () {
@@ -508,8 +511,16 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::post('plans', [AdminPlanController::class, 'store']);
     Route::put('plans/{plan}', [AdminPlanController::class, 'update']);
 
+    Route::get('activity', [AdminTenantController::class, 'activity']);
+
+    Route::get('announcements', [AdminAnnouncementController::class, 'index']);
+    Route::post('announcements', [AdminAnnouncementController::class, 'store']);
+    Route::put('announcements/{announcement}', [AdminAnnouncementController::class, 'update']);
+    Route::delete('announcements/{announcement}', [AdminAnnouncementController::class, 'destroy']);
+
     Route::get('tenants', [AdminTenantController::class, 'index']);
     Route::get('tenants/{organization}', [AdminTenantController::class, 'show']);
+    Route::get('tenants/{organization}/users', [AdminTenantController::class, 'users']);
     Route::post('tenants/{organization}/suspend', [AdminTenantController::class, 'suspend']);
     Route::patch('tenants/{organization}/entitlements', [AdminTenantController::class, 'updateEntitlements']);
 

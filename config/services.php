@@ -75,6 +75,8 @@ return [
     'platform' => [
         'allow_public_signup' => env('PLATFORM_ALLOW_PUBLIC_SIGNUP', true),
         'trial_days' => env('PLATFORM_TRIAL_DAYS', 14),
+        'tenant_notice_limit' => env('PLATFORM_TENANT_NOTICE_LIMIT', 10),
+        'books_org_id' => env('PLATFORM_BOOKS_ORG_ID'),
     ],
 
 ];
