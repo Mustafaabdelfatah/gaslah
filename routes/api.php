@@ -38,6 +38,8 @@ use App\Http\Controllers\API\Tenancy\Loyalty\LoyaltyController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
 use App\Http\Controllers\API\Tenancy\Payments\PayoutController;
+use App\Http\Controllers\API\Tenancy\Reports\AnalyticsController;
+use App\Http\Controllers\API\Tenancy\Reports\DashboardController;
 use App\Http\Controllers\API\Tenancy\Reports\ReportController as SalesReportController;
 use App\Http\Controllers\API\Tenancy\StaffContextController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionController;
@@ -347,6 +349,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('top-customers', [SalesReportController::class, 'topCustomers']);
         Route::get('cancellation-rate', [SalesReportController::class, 'cancellationRate']);
     });
+
+    Route::get('analytics', [AnalyticsController::class, 'index']);
+    Route::get('dashboard', [DashboardController::class, 'index']);
 });
 
 /*
