@@ -196,6 +196,17 @@ return [
     'delivery_status_changed' => 'Delivery status updated',
     'delivery_invalid_transition' => 'This delivery status transition is not allowed.',
     'delivery_driver_phone_taken' => 'This phone number is already used by another driver.',
+    'delivery_arrived' => 'The driver arrived at the customer location',
+    'delivery_invoice_approval_set' => 'Invoice approval requirement updated',
+    'delivery_inventory_done' => 'Basket inventoried and invoice created',
+    'delivery_invoice_note' => 'Delivery invoice',
+    'delivery_integration_disabled' => 'The external delivery apps method is not enabled.',
+    'delivery_already_invoiced' => 'An invoice has already been created for this request.',
+    'delivery_awaiting_invoice_approval' => 'Awaiting customer approval of the invoice.',
+    'delivery_photo_required' => 'A delivery proof photo is required.',
+    'delivery_portal_ordering_disabled' => 'Portal ordering is not enabled.',
+    'delivery_no_driver_method' => 'No delivery method with a driver is enabled.',
+    'delivery_approval_not_required' => 'This request does not require invoice approval.',
 
     /*
     |--------------------------------------------------------------------------

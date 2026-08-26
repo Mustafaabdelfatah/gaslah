@@ -279,5 +279,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('drivers', [DeliveryController::class, 'drivers']);
         Route::post('drivers', [DeliveryController::class, 'storeDriver']);
         Route::put('drivers/{driver}', [DeliveryController::class, 'updateDriver']);
+
+        Route::get('stats', [DeliveryController::class, 'stats']);
+
+        Route::get('requests', [DeliveryController::class, 'requests']);
+        Route::post('requests', [DeliveryController::class, 'storeRequest']);
+        Route::get('requests/{delivery}', [DeliveryController::class, 'showRequest']);
+        Route::patch('requests/{delivery}', [DeliveryController::class, 'updateRequest']);
+        Route::post('requests/{delivery}/action', [DeliveryController::class, 'requestAction']);
+        Route::post('requests/{delivery}/inventory', [DeliveryController::class, 'inventory']);
     });
 });

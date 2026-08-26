@@ -2,15 +2,26 @@
 
 namespace App\Http\Controllers\API\Tenancy\Delivery;
 
+use App\Enum\Delivery\DeliverySourceEnum;
+use App\Enum\Delivery\DeliveryStatusEnum;
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Delivery\DeliveryInventoryRequest;
 use App\Http\Requests\Delivery\DeliveryZoneRequest;
 use App\Http\Requests\Delivery\DriverRequest;
+use App\Http\Requests\Delivery\StoreDeliveryRequestRequest;
+use App\Http\Requests\Global\Other\PageRequest;
+use App\Models\Branch;
+use App\Models\Customer;
+use App\Models\DeliveryRequest;
 use App\Models\DeliveryZone;
 use App\Models\Driver;
+use App\Models\Order;
+use App\Services\Delivery\DeliveryRequestService;
 use App\Services\Delivery\DeliveryService;
 use App\Services\Delivery\DeliverySettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rules\Enum;
 
 class DeliveryController extends TenantController
 {
@@ -19,6 +30,7 @@ class DeliveryController extends TenantController
     public function __construct(
         private readonly DeliverySettingsService $settings,
         private readonly DeliveryService $delivery,
+        private readonly DeliveryRequestService $requests,
     ) {
         parent::__construct();
     }
@@ -157,9 +169,195 @@ class DeliveryController extends TenantController
 
     /*
     |--------------------------------------------------------------------------
+    | Requests
+    |--------------------------------------------------------------------------
+    */
+    public function requests(PageRequest $request): JsonResponse
+    {
+        $this->staff();
+        $this->requireFeature(self::FEATURE);
+
+        $query = DeliveryRequest::query()
+            ->inBranches($this->readBranchIds())
+            ->with(['customer:id,name,phone', 'driver:id,name,phone'])
+            ->when($request->filled('type'), fn ($q) => $q->where('type', $request->input('type')))
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')))
+            ->latest('id')
+            ->limit(200);
+
+        return successResponse($query->get());
+    }
+
+    public function showRequest(DeliveryRequest $delivery): JsonResponse
+    {
+        $this->staff();
+        $this->requireFeature(self::FEATURE);
+        $this->assertOwnedRequest($delivery);
+
+        return successResponse($delivery->load('customer', 'driver', 'order', 'zone', 'history'));
+    }
+
+    public function storeRequest(StoreDeliveryRequestRequest $request): JsonResponse
+    {
+        $this->staff();
+        $this->requireFeature(self::FEATURE);
+
+        $customer = $this->ownedCustomer((int) $request->input('customer_id'));
+        $this->assertOrderOwned($request->input('order_id'));
+        $zone = $this->resolveZone($request->input('zone_id'));
+
+        $created = $this->requests->createRequests(
+            $this->organizationId(),
+            $this->writeBranchId(),
+            $customer,
+            $request->input('type'),
+            $zone,
+            $request->validated(),
+            $this->settings->resolve($this->organizationId()),
+            DeliverySourceEnum::Staff,
+            $this->staff()->getKey(),
+        );
+
+        return successResponse($created, __('api.created_success'), 201);
+    }
+
+    /**
+     * Assign a driver/external app, adjust the fee, and/or submit a status.
+     */
+    public function updateRequest(Request $request, DeliveryRequest $delivery): JsonResponse
+    {
+        $this->staff();
+        $this->requireFeature(self::FEATURE);
+        $this->assertOwnedRequest($delivery);
+
+        $data = $request->validate([
+            'driver_id' => ['nullable', 'integer'],
+            'external_provider' => ['nullable', 'string', 'max:60'],
+            'external_ref' => ['nullable', 'string', 'max:120'],
+            'fee' => ['nullable', 'numeric', 'min:0'],
+            'status' => ['nullable', new Enum(DeliveryStatusEnum::class)],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $settings = $this->settings->resolve($this->organizationId());
+
+        if (isset($data['driver_id'])) {
+            $delivery = $this->requests->assignDriver($delivery, (int) $data['driver_id'], $this->readBranchIds(), $settings);
+        }
+
+        if (isset($data['external_provider'])) {
+            $delivery = $this->requests->assignExternal($delivery, $data['external_provider'], $data['external_ref'] ?? null, isset($data['fee']) ? (float) $data['fee'] : null, $settings);
+        } elseif (isset($data['fee'])) {
+            $delivery->forceFill(['fee' => round((float) $data['fee'], 2)])->save();
+        }
+
+        if (isset($data['status'])) {
+            $delivery = $this->requests->submitStatus($delivery, DeliveryStatusEnum::from($data['status']), $this->staff()->getKey(), $settings);
+        }
+
+        return successResponse($delivery->refresh()->load('history'), __('api.updated_success'));
+    }
+
+    /**
+     * Unified staff action: confirm arrival, or flag invoice approval.
+     */
+    public function requestAction(Request $request, DeliveryRequest $delivery): JsonResponse
+    {
+        $this->staff();
+        $this->requireFeature(self::FEATURE);
+        $this->assertOwnedRequest($delivery);
+
+        $data = $request->validate([
+            'action' => ['required', 'in:arrive,require_invoice_approval'],
+            'require' => ['nullable', 'boolean'],
+        ]);
+
+        $userId = $this->staff()->getKey();
+
+        $delivery = match ($data['action']) {
+            'arrive' => $this->requests->arrive($delivery, $userId),
+            'require_invoice_approval' => $this->requests->requireInvoiceApproval($delivery, (bool) ($data['require'] ?? true), $userId),
+        };
+
+        return successResponse($delivery, __('api.updated_success'));
+    }
+
+    /**
+     * Turn the basket into a priced invoice and link it to the request.
+     */
+    public function inventory(DeliveryInventoryRequest $request, DeliveryRequest $delivery): JsonResponse
+    {
+        $this->staff();
+        $this->requireFeature(self::FEATURE);
+        $this->assertOwnedRequest($delivery);
+
+        $branch = Branch::query()->where('organization_id', $this->organizationId())->findOrFail($delivery->branch_id);
+
+        $delivery = $this->requests->inventory(
+            $delivery,
+            $branch,
+            $request->input('items'),
+            $request->input('notes'),
+            $this->staff()->getKey(),
+            $this->settings->resolve($this->organizationId()),
+        );
+
+        return successResponse($delivery->load('order'), __('api.updated_success'));
+    }
+
+    public function stats(): JsonResponse
+    {
+        $this->staff();
+        $this->requireFeature(self::FEATURE);
+
+        return successResponse($this->requests->stats($this->readBranchIds()));
+    }
+
+    /*
+    |--------------------------------------------------------------------------
     | Helper Methods
     |--------------------------------------------------------------------------
     */
+    private function assertOwnedRequest(DeliveryRequest $delivery): void
+    {
+        abort_unless(in_array($delivery->branch_id, $this->readBranchIds(), true), 404, __('api.record_not_found'));
+    }
+
+    private function ownedCustomer(int $customerId): Customer
+    {
+        $customer = Customer::query()->forOrganization($this->organizationId())->find($customerId);
+        abort_if($customer === null, 404, __('api.record_not_found'));
+
+        return $customer;
+    }
+
+    private function assertOrderOwned(?int $orderId): void
+    {
+        if ($orderId === null) {
+            return;
+        }
+
+        // A referenced order must belong to the caller's branches — never leak another
+        // organization's financials by attaching to a foreign order.
+        $exists = Order::query()->inBranches($this->readBranchIds())->whereKey($orderId)->exists();
+        abort_unless($exists, 404, __('api.record_not_found'));
+    }
+
+    private function resolveZone(?int $zoneId): ?DeliveryZone
+    {
+        if ($zoneId === null) {
+            return null;
+        }
+
+        $zone = DeliveryZone::query()
+            ->forOrganization($this->organizationId())
+            ->inBranches($this->readBranchIds())
+            ->find($zoneId);
+        abort_if($zone === null, 404, __('api.record_not_found'));
+
+        return $zone;
+    }
+
     private function assertOwnedDriver(Driver $driver): void
     {
         // Staff manage their own drivers only; platform drivers belong to the platform.

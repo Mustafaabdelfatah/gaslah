@@ -196,6 +196,17 @@ return [
     'delivery_status_changed' => 'تم تحديث حالة التوصيل',
     'delivery_invalid_transition' => 'انتقال حالة التوصيل غير مسموح به.',
     'delivery_driver_phone_taken' => 'رقم الهاتف مستخدم من سائق آخر.',
+    'delivery_arrived' => 'وصل المندوب لموقع العميل',
+    'delivery_invoice_approval_set' => 'تم تحديث اشتراط موافقة الفاتورة',
+    'delivery_inventory_done' => 'جرد السلة وإنشاء الفاتورة',
+    'delivery_invoice_note' => 'فاتورة توصيل',
+    'delivery_integration_disabled' => 'طريقة تطبيقات التوصيل غير مفعّلة.',
+    'delivery_already_invoiced' => 'تم إنشاء فاتورة لهذا الطلب مسبقاً.',
+    'delivery_awaiting_invoice_approval' => 'بانتظار موافقة العميل على الفاتورة.',
+    'delivery_photo_required' => 'يلزم إرفاق صورة التسليم.',
+    'delivery_portal_ordering_disabled' => 'طلب التوصيل من البوابة غير مفعّل.',
+    'delivery_no_driver_method' => 'لا توجد طريقة توصيل بسائق مفعّلة.',
+    'delivery_approval_not_required' => 'لا يلزم موافقة على هذا الطلب.',
 
     /*
     |--------------------------------------------------------------------------
