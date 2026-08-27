@@ -4,6 +4,8 @@ namespace App\Http\Controllers\API\Tenancy\Delivery;
 
 use App\Enum\Delivery\DeliverySourceEnum;
 use App\Enum\Delivery\DeliveryStatusEnum;
+use App\Filters\Delivery\DeliveryRequestFilter;
+use App\Filters\Global\OrderByFilter;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Delivery\AssignDeliveryRequest;
 use App\Http\Requests\Delivery\DeliveryActionRequest;
@@ -13,6 +15,9 @@ use App\Http\Requests\Delivery\DeliveryZoneRequest;
 use App\Http\Requests\Delivery\DriverRequest;
 use App\Http\Requests\Delivery\StoreDeliveryRequestRequest;
 use App\Http\Requests\Global\Other\PageRequest;
+use App\Http\Resources\Delivery\DeliveryRequestResource;
+use App\Http\Resources\Delivery\DeliveryZoneResource;
+use App\Http\Resources\Delivery\DriverResource;
 use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\DeliveryRequest;
@@ -24,6 +29,7 @@ use App\Services\Delivery\DeliveryService;
 use App\Services\Delivery\DeliverySettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pipeline\Pipeline;
 use Illuminate\Support\Facades\URL;
 
 class DeliveryController extends TenantController
@@ -73,13 +79,15 @@ class DeliveryController extends TenantController
         $this->staff();
         $this->requireFeature(self::FEATURE);
 
+        // A branch's zones are a small, hand-curated list, so this is deliberately not
+        // paginated — the counter needs all of them to price a delivery.
         $zones = DeliveryZone::query()
             ->forOrganization($this->organizationId())
             ->inBranches($this->readBranchIds())
             ->orderBy('sort_order')
             ->get();
 
-        return successResponse($zones);
+        return successResponse(DeliveryZoneResource::collection($zones));
     }
 
     public function storeZone(DeliveryZoneRequest $request): JsonResponse
@@ -97,18 +105,18 @@ class DeliveryController extends TenantController
             'sort_order' => $sortOrder,
         ]);
 
-        return successResponse($zone, __('api.created_success'), 201);
+        return successResponse(new DeliveryZoneResource($zone), __('api.created_success'), 201);
     }
 
     public function updateZone(DeliveryZoneRequest $request, DeliveryZone $zone): JsonResponse
     {
         $this->requireManager();
         $this->requireFeature(self::FEATURE);
-        abort_unless($zone->organization_id === $this->organizationId(), 404, __('api.record_not_found'));
+        $this->assertOwned($zone);
 
         $zone->update($request->validated());
 
-        return successResponse($zone->refresh(), __('api.updated_success'));
+        return successResponse(new DeliveryZoneResource($zone->refresh()), __('api.updated_success'));
     }
 
     /*
@@ -122,18 +130,19 @@ class DeliveryController extends TenantController
         $this->requireFeature(self::FEATURE);
 
         $settings = $this->settings->resolve($this->organizationId());
+        // The assignable set is small by nature (a branch's own drivers plus any platform
+        // drivers covering it), and the counter picks from all of them at once.
         $drivers = $this->delivery->assignableDrivers($this->readBranchIds(), $settings)
             ->orderBy('name')
             ->get();
 
-        return successResponse($drivers);
+        return successResponse(DriverResource::collection($drivers));
     }
 
     public function storeDriver(DriverRequest $request): JsonResponse
     {
         $this->requireManager();
         $this->requireFeature(self::FEATURE);
-        $this->assertPhoneIsFree($request->input('phone'));
 
         $driver = Driver::query()->create([
             ...$request->validated(),
@@ -142,7 +151,7 @@ class DeliveryController extends TenantController
             'is_platform' => false,
         ]);
 
-        return successResponse($driver, __('api.created_success'), 201);
+        return successResponse(new DriverResource($driver), __('api.created_success'), 201);
     }
 
     public function updateDriver(DriverRequest $request, Driver $driver): JsonResponse
@@ -150,11 +159,10 @@ class DeliveryController extends TenantController
         $this->requireManager();
         $this->requireFeature(self::FEATURE);
         $this->assertOwnedDriver($driver);
-        $this->assertPhoneIsFree($request->input('phone'), $driver->getKey());
 
         $driver->update($request->validated());
 
-        return successResponse($driver->refresh(), __('api.updated_success'));
+        return successResponse(new DriverResource($driver->refresh()), __('api.updated_success'));
     }
 
     /*
@@ -167,15 +175,14 @@ class DeliveryController extends TenantController
         $this->staff();
         $this->requireFeature(self::FEATURE);
 
-        $query = DeliveryRequest::query()
-            ->inBranches($this->readBranchIds())
-            ->with(['customer:id,name,phone', 'driver:id,name,phone'])
-            ->when($request->filled('type'), fn ($q) => $q->where('type', $request->input('type')))
-            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')))
-            ->latest('id')
-            ->limit(200);
+        $query = app(Pipeline::class)
+            ->send(DeliveryRequest::query()
+                ->inBranches($this->readBranchIds())
+                ->with(['customer:id,name,phone', 'driver:id,name,phone']))
+            ->through([DeliveryRequestFilter::class, OrderByFilter::class])
+            ->thenReturn();
 
-        return successResponse($query->get());
+        return successResponse(wrapPaginate($query, DeliveryRequestResource::class));
     }
 
     public function showRequest(DeliveryRequest $delivery): JsonResponse
@@ -184,11 +191,12 @@ class DeliveryController extends TenantController
         $this->requireFeature(self::FEATURE);
         $this->assertInReadScope($delivery);
 
-        $data = $delivery->load('customer', 'driver', 'order', 'zone', 'history')->toArray();
-        $data['pickup_photo_signed_url'] = $this->signedPhotoUrl($delivery->pickup_photo_url);
-        $data['delivery_photo_signed_url'] = $this->signedPhotoUrl($delivery->delivery_photo_url);
+        $delivery->load('customer', 'driver', 'order', 'zone', 'history');
 
-        return successResponse($data);
+        return successResponse(new DeliveryRequestResource($delivery, [
+            'pickup' => $this->signedPhotoUrl($delivery->pickup_photo_url),
+            'delivery' => $this->signedPhotoUrl($delivery->delivery_photo_url),
+        ]));
     }
 
     public function storeRequest(StoreDeliveryRequestRequest $request): JsonResponse
@@ -351,20 +359,5 @@ class DeliveryController extends TenantController
     {
         // Staff manage their own drivers only; platform drivers belong to the platform.
         abort_if($driver->is_platform || $driver->organization_id !== $this->organizationId(), 404, __('api.record_not_found'));
-    }
-
-    private function assertPhoneIsFree(?string $phone, ?int $ignoreId = null): void
-    {
-        if ($phone === null) {
-            return;
-        }
-
-        // A driver phone is unique system-wide so it resolves a single driver at login.
-        $exists = Driver::query()
-            ->where('phone', $phone)
-            ->when($ignoreId, fn ($q) => $q->whereKeyNot($ignoreId))
-            ->exists();
-
-        abort_if($exists, 422, __('api.delivery_driver_phone_taken'));
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API\Tenancy\Inventory;
 
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Inventory\SupplierRequest;
+use App\Http\Resources\Inventory\SupplierResource;
 use App\Models\Supplier;
 use Illuminate\Http\JsonResponse;
 
@@ -28,7 +29,7 @@ class SupplierController extends TenantController
             'organization_id' => $this->organizationId(),
         ]);
 
-        return successResponse($supplier, __('api.created_success'), 201);
+        return successResponse(new SupplierResource($supplier), __('api.created_success'), 201);
     }
 
     public function update(SupplierRequest $request, Supplier $supplier): JsonResponse
@@ -37,6 +38,6 @@ class SupplierController extends TenantController
 
         $supplier->update($request->validated());
 
-        return successResponse($supplier->refresh(), __('api.updated_success'));
+        return successResponse(new SupplierResource($supplier->refresh()), __('api.updated_success'));
     }
 }

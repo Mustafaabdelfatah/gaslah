@@ -2,30 +2,36 @@
 
 namespace App\Http\Controllers\API\Tenancy\Inventory;
 
+use App\Filters\Global\NameFilter;
+use App\Filters\Global\OrderByFilter;
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Global\Other\PageRequest;
 use App\Http\Requests\Inventory\InventoryItemRequest;
+use App\Http\Resources\Inventory\InventoryItemResource;
+use App\Http\Resources\Inventory\PurchaseOrderResource;
 use App\Models\InventoryItem;
 use App\Models\PurchaseOrder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Pipeline\Pipeline;
 
 class InventoryController extends TenantController
 {
-    public function items(): JsonResponse
+    public function items(PageRequest $request): JsonResponse
     {
+        $query = app(Pipeline::class)
+            ->send(InventoryItem::query()
+                ->forOrganization($this->organizationId())
+                ->inBranches($this->readBranchIds())
+                ->where('is_active', true)
+                ->with('unit:id,name,symbol'))
+            ->through([NameFilter::class, OrderByFilter::class])
+            ->thenReturn();
 
-        $items = InventoryItem::query()
-            ->forOrganization($this->organizationId())
-            ->inBranches($this->readBranchIds())
-            ->where('is_active', true)
-            ->with('unit:id,name,symbol')
-            ->orderBy('name')
-            ->get();
+        // The low-stock count is over the whole tenant, not just the page, so the shelf
+        // badge stays right however the list is paged.
+        $lowStock = (clone $query)->lowStock()->count();
 
-        return successResponse([
-            'items' => $items,
-            'total' => $items->count(),
-            'low_stock' => $items->where('low_stock', true)->count(),
-        ]);
+        return successResponse(wrapPaginate($query, InventoryItemResource::class, ['low_stock' => $lowStock]));
     }
 
     public function storeItem(InventoryItemRequest $request): JsonResponse
@@ -61,35 +67,20 @@ class InventoryController extends TenantController
             ->orderBy('name')
             ->get();
 
-        return successResponse($items);
+        return successResponse(InventoryItemResource::collection($items));
     }
 
     /**
      * Purchase orders — read-only.
      */
-    public function purchaseOrders(): JsonResponse
+    public function purchaseOrders(PageRequest $request): JsonResponse
     {
-
-        $orders = PurchaseOrder::query()
+        $query = PurchaseOrder::query()
             ->inBranches($this->readBranchIds())
             ->with(['supplier:id,name'])
             ->withCount('items')
-            ->latest('id')
-            ->limit(50)
-            ->get();
+            ->latest('id');
 
-        $data = $orders->map(fn (PurchaseOrder $po) => [
-            'id' => $po->getKey(),
-            'branch_id' => $po->branch_id,
-            'supplier_id' => $po->supplier_id,
-            'supplier_name' => $po->supplier?->name,
-            'status' => $po->status,
-            'total' => round((float) $po->total, 2),
-            'created_at' => $po->created_at,
-            'received_at' => $po->received_at,
-            'items_count' => $po->items_count,
-        ]);
-
-        return successResponse($data);
+        return successResponse(wrapPaginate($query, PurchaseOrderResource::class));
     }
 }

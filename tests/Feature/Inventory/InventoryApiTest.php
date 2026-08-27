@@ -40,9 +40,10 @@ class InventoryApiTest extends TestCase
             'name' => 'Detergent', 'unit_id' => $this->unit->getKey(), 'quantity' => 5, 'reorder_level' => 10,
         ])->assertCreated()->assertJsonPath('data.low_stock', true);
 
+        // Paginated envelope, with the tenant-wide low-stock count carried as meta.
         $this->getJson('/api/inventory/items')
             ->assertOk()
-            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.total', 1)
             ->assertJsonPath('data.low_stock', 1);
     }
 
@@ -93,7 +94,7 @@ class InventoryApiTest extends TestCase
 
         $this->getJson('/api/inventory/purchase-orders')
             ->assertOk()
-            ->assertJsonPath('data.0.supplier_name', 'Acme Co')
-            ->assertJsonPath('data.0.status', 'received');
+            ->assertJsonPath('data.data.0.supplier_name', 'Acme Co')
+            ->assertJsonPath('data.data.0.status', 'received');
     }
 }

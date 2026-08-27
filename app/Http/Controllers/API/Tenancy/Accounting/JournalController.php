@@ -6,6 +6,7 @@ use App\Enum\Accounting\JournalSourceEnum;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Accounting\StoreJournalRequest;
 use App\Http\Requests\Global\Other\PageRequest;
+use App\Http\Resources\Accounting\JournalEntryResource;
 use App\Models\Account;
 use App\Models\JournalEntry;
 use App\Services\Accounting\BooksLockService;
@@ -33,7 +34,7 @@ class JournalController extends TenantController
             ->when($request->filled('to'), fn ($q) => $q->whereDate('date', '<=', $request->input('to')))
             ->latest('entry_no');
 
-        return successResponse(wrapPaginate($query));
+        return successResponse(wrapPaginate($query, JournalEntryResource::class));
     }
 
     public function show(JournalEntry $journal): JsonResponse

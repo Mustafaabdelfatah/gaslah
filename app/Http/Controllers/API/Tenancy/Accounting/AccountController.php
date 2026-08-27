@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\Tenancy\Accounting;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Accounting\StoreAccountRequest;
 use App\Http\Requests\Accounting\UpdateAccountRequest;
+use App\Http\Resources\Accounting\AccountResource;
 use App\Models\Account;
 use App\Services\Accounting\ChartOfAccountsService;
 use Illuminate\Http\JsonResponse;
@@ -24,12 +25,14 @@ class AccountController extends TenantController
         $this->requireManager();
         $this->chart->ensureChartOfAccounts($this->organizationId());
 
+        // The chart is a fixed, small structure the whole UI needs at once — paginating
+        // it would only make the account pickers assemble it again client-side.
         $accounts = Account::query()
             ->forOrganization($this->organizationId())
             ->orderBy('code')
             ->get();
 
-        return successResponse($accounts);
+        return successResponse(AccountResource::collection($accounts));
     }
 
     public function store(StoreAccountRequest $request): JsonResponse
@@ -59,7 +62,7 @@ class AccountController extends TenantController
 
         $account->update($request->validated());
 
-        return successResponse($account->refresh(), __('api.updated_success'));
+        return successResponse(new AccountResource($account->refresh()), __('api.updated_success'));
     }
 
     private function assertCodeIsFree(string $code): void
