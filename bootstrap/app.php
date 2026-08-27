@@ -6,6 +6,7 @@ use App\Exceptions\InvalidEmailAndPasswordCombinationException;
 use App\Exceptions\InvalidOtpException;
 use App\Exceptions\InvalidPasswordResetTokenException;
 use App\Exceptions\ModelAlreadyExistsException;
+use App\Http\Middleware\EnsurePublicSignupIsOpen;
 use App\Http\Middleware\LanguageMiddleware;
 use App\Http\Middleware\PlatformPermissionMiddleware;
 use App\Services\Accounting\AccountingException;
@@ -30,6 +31,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'platform.permission' => PlatformPermissionMiddleware::class,
+            'signup.open' => EnsurePublicSignupIsOpen::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

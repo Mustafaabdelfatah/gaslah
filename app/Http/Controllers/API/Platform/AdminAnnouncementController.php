@@ -2,69 +2,72 @@
 
 namespace App\Http\Controllers\API\Platform;
 
-use App\Enum\Platform\PlatformAnnouncementLevelEnum;
-use App\Enum\Tenancy\PlatformPermissionEnum;
+use App\Filters\Global\ActiveFilter;
+use App\Filters\Global\OrderByFilter;
+use App\Filters\Platform\OrganizationScopeFilter;
+use App\Http\Controllers\API\BaseController;
+use App\Http\Requests\Global\Other\PageRequest;
+use App\Http\Requests\Platform\PlatformAnnouncementRequest;
+use App\Http\Resources\Platform\PlatformAnnouncementResource;
 use App\Models\PlatformAnnouncement;
+use App\Models\User;
+use App\Trait\Global\HasDeleteMethods;
+use App\Trait\Global\HasToggleActiveMethods;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
+use Illuminate\Pipeline\Pipeline;
 
 /**
- * Platform → tenant broadcast banners (manage_announcements).
+ * Platform → tenant broadcast banners. Gated on manage_announcements at the routes.
  */
-class AdminAnnouncementController extends PlatformBaseController
+class AdminAnnouncementController extends BaseController
 {
-    public function index(): JsonResponse
+    use HasDeleteMethods, HasToggleActiveMethods;
+
+    public function __construct()
     {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManageAnnouncements);
+        parent::__construct();
+        $this->model = PlatformAnnouncement::class;
+
+        // Platform admins are authorised by the route middleware, not a per-model policy.
+        $this->enableDeletePolicy(false)->enableTogglePolicy(false);
+    }
+
+    public function index(PageRequest $request): JsonResponse
+    {
+        $query = app(Pipeline::class)
+            ->send(PlatformAnnouncement::query()->with('organization:id,name'))
+            ->through([OrganizationScopeFilter::class, ActiveFilter::class, OrderByFilter::class])
+            ->thenReturn();
+
+        return successResponse(wrapPaginate($query, PlatformAnnouncementResource::class));
+    }
+
+    public function store(PlatformAnnouncementRequest $request): JsonResponse
+    {
+        /** @var User $admin */
+        $admin = $request->user();
+
+        $announcement = PlatformAnnouncement::create([
+            ...$request->validated(),
+            'created_by_id' => $admin->getKey(),
+        ]);
 
         return successResponse(
-            PlatformAnnouncement::query()->with('organization:id,name')->latest()->paginate(20)
+            new PlatformAnnouncementResource($announcement->refresh()),
+            __('api.created_success'),
+            201,
         );
     }
 
-    public function store(Request $request): JsonResponse
+    public function show(PlatformAnnouncement $announcement): JsonResponse
     {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManageAnnouncements);
-
-        $data = $this->validated($request);
-        $data['created_by_id'] = $this->admin()->getKey();
-
-        return successResponse(PlatformAnnouncement::query()->create($data), __('api.created_success'), 201);
+        return successResponse(new PlatformAnnouncementResource($announcement->load('organization:id,name')));
     }
 
-    public function update(Request $request, PlatformAnnouncement $announcement): JsonResponse
+    public function update(PlatformAnnouncementRequest $request, PlatformAnnouncement $announcement): JsonResponse
     {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManageAnnouncements);
+        $announcement->update($request->validated());
 
-        $announcement->update($this->validated($request, partial: true));
-
-        return successResponse($announcement, __('api.updated_success'));
-    }
-
-    public function destroy(PlatformAnnouncement $announcement): JsonResponse
-    {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManageAnnouncements);
-
-        $announcement->delete();
-
-        return successResponse(null, __('api.deleted_success'));
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function validated(Request $request, bool $partial = false): array
-    {
-        $required = $partial ? 'sometimes' : 'required';
-
-        return $request->validate([
-            'title' => [$required, 'string', 'max:200'],
-            'body' => [$required, 'string', 'max:5000'],
-            'level' => ['nullable', 'in:'.implode(',', PlatformAnnouncementLevelEnum::values())],
-            'organization_id' => ['nullable', 'integer', 'exists:organizations,id'],
-            'is_active' => ['nullable', 'boolean'],
-            'starts_at' => ['nullable', 'date'],
-            'ends_at' => ['nullable', 'date', 'after_or_equal:starts_at'],
-        ]);
+        return successResponse(new PlatformAnnouncementResource($announcement->refresh()), __('api.updated_success'));
     }
 }

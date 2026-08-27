@@ -8,6 +8,7 @@ use App\Models\Organization;
 use App\Models\PlatformPlan;
 use App\Models\User;
 use App\Models\UserBranch;
+use App\Services\Tenancy\Auth\StaffTokenIssuer;
 use App\Services\Tenancy\StaffPermissionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -22,7 +23,29 @@ class TenantProvisioner
     public function __construct(
         private readonly StaffPermissionService $permissions,
         private readonly PlatformSubscriptionService $subscriptions,
+        private readonly StaffTokenIssuer $tokens,
     ) {}
+
+    /**
+     * Provision a tenant and hand its owner a staff session, so self-service signup lands
+     * the new owner logged in.
+     *
+     * @param  array{org_name: string, admin_name: string, email: string, password: string, phone?: string|null, plan_id?: int|null}  $attributes
+     * @return array{organization: Organization, branch: Branch, user: User, token: string}
+     */
+    public function provisionWithSession(array $attributes): array
+    {
+        $result = $this->provision($attributes);
+
+        return [
+            ...$result,
+            'token' => $this->tokens->issue(
+                $result['user'],
+                $result['organization']->getKey(),
+                $result['branch']->getKey(),
+            ),
+        ];
+    }
 
     /**
      * @param  array{org_name: string, admin_name: string, email: string, password: string, phone?: string|null, plan_id?: int|null}  $attributes

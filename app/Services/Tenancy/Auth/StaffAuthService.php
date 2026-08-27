@@ -2,7 +2,6 @@
 
 namespace App\Services\Tenancy\Auth;
 
-use App\Enum\Global\TokenKindEnum;
 use App\Enum\Tenancy\SecuritySurfaceEnum;
 use App\Models\User;
 use App\Services\Auth\SecurityLogService;
@@ -24,6 +23,7 @@ class StaffAuthService
         private readonly SecurityLogService $securityLog,
         private readonly StaffPermissionService $permissions,
         private readonly TenantContext $tenant,
+        private readonly StaffTokenIssuer $tokens,
     ) {}
 
     /**
@@ -45,7 +45,7 @@ class StaffAuthService
         $this->securityLog->recordSuccess($surface, $user, $email);
         $user->forceFill(['last_login' => now()])->saveQuietly();
 
-        $token = $this->issueToken($user, $organizationId, $branchId, $data['meta'] ?? []);
+        $token = $this->tokens->issue($user, $organizationId, $branchId, $data['meta'] ?? []);
 
         // Bind the context to this freshly signed-in user so the response can read
         // its effective permissions without a second resolution pass.
@@ -108,35 +108,6 @@ class StaffAuthService
         }
 
         return [$membership->branch->organization_id, $membership->branch_id];
-    }
-
-    private function issueToken(User $user, int $organizationId, int $branchId, array $meta): string
-    {
-        $token = $user->createToken(TokenKindEnum::Staff->value);
-
-        $token->accessToken->forceFill([
-            'meta' => [
-                'kind' => TokenKindEnum::Staff->value,
-                'organization_id' => $organizationId,
-                'branch_id' => $branchId,
-                'device' => $this->deviceMeta($meta),
-            ],
-        ])->save();
-
-        return $token->plainTextToken;
-    }
-
-    /**
-     * @param  array<string, mixed>  $meta
-     * @return array<string, mixed>
-     */
-    private function deviceMeta(array $meta): array
-    {
-        return [
-            'platform' => $meta['platform'] ?? null,
-            'ip' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-        ];
     }
 
     private function fail(string $message, int $status): never

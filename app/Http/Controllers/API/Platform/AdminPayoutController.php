@@ -2,179 +2,137 @@
 
 namespace App\Http\Controllers\API\Platform;
 
-use App\Enum\Tenancy\PlatformPermissionEnum;
-use App\Models\Organization;
+use App\Filters\Global\OrderByFilter;
+use App\Filters\Platform\PayoutFilter;
+use App\Http\Controllers\API\BaseController;
+use App\Http\Requests\Global\Other\PageRequest;
+use App\Http\Requests\Platform\MarkPayoutSentRequest;
+use App\Http\Requests\Platform\PayoutDecisionRequest;
+use App\Http\Requests\Platform\PayoutSettingsRequest;
+use App\Http\Requests\Platform\StorePayoutBatchRequest;
+use App\Http\Requests\Platform\UpdatePayoutFeeRequest;
+use App\Http\Resources\Platform\PayoutSettlementResource;
 use App\Models\PayoutSettlement;
+use App\Models\User;
 use App\Services\Payments\PayoutService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
+use Illuminate\Pipeline\Pipeline;
 use Illuminate\Support\Carbon;
 
 /**
- * The platform operator's payout console: create batches, run the scheduled draw, and
- * drive the maker-checker approval flow. Reads need view_finance or manage_payouts;
- * every mutation needs manage_payouts. The full IBAN is shown only to the transfer
- * executor (manage_payouts); view_finance sees it masked.
+ * The platform operator's payout console: open batches, run the scheduled draw, and drive
+ * the maker-checker approval flow.
+ *
+ * The routes carry the split — reads need view_finance or manage_payouts, every mutation
+ * needs manage_payouts. Masking of the IBAN for a read-only viewer lives in the resource.
  */
-class AdminPayoutController extends PlatformBaseController
+class AdminPayoutController extends BaseController
 {
-    private const READ = [PlatformPermissionEnum::ViewFinance, PlatformPermissionEnum::ManagePayouts];
-
     public function __construct(private readonly PayoutService $payouts)
     {
         parent::__construct();
     }
 
-    public function index(Request $request): JsonResponse
+    public function index(PageRequest $request): JsonResponse
     {
-        $this->requireAnyPlatformPermission(self::READ);
+        $query = app(Pipeline::class)
+            ->send(
+                PayoutSettlement::query()
+                    ->with('organization:id,name')
+                    ->withCount(['approvals as approve_count' => fn ($q) => $q->where('decision', 'approve')])
+            )
+            ->through([PayoutFilter::class, OrderByFilter::class])
+            ->thenReturn();
 
-        $settlements = PayoutSettlement::query()
-            ->withCount(['approvals as approve_count' => fn ($q) => $q->where('decision', 'approve')])
-            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')))
-            ->when($request->filled('org_id'), fn ($q) => $q->where('organization_id', $request->input('org_id')))
-            ->latest('id')
-            ->limit(300)
-            ->get();
-
-        return successResponse($settlements);
-    }
-
-    public function store(Request $request): JsonResponse
-    {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManagePayouts);
-
-        $data = $request->validate([
-            'organization_id' => ['required', 'integer'],
-            'fee' => ['nullable', 'numeric', 'min:0'],
-            'note' => ['nullable', 'string', 'max:500'],
-        ]);
-
-        $organization = Organization::query()->findOrFail($data['organization_id']);
-        $settlement = $this->payouts->createBatch(
-            $organization,
-            $this->admin()->getKey(),
-            isset($data['fee']) ? (float) $data['fee'] : null,
-            note: $data['note'] ?? null,
-        );
-
-        return successResponse($settlement, __('api.created_success'), 201);
-    }
-
-    public function balances(): JsonResponse
-    {
-        $this->requireAnyPlatformPermission(self::READ);
-
-        return successResponse($this->payouts->balances());
-    }
-
-    public function runDue(): JsonResponse
-    {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManagePayouts);
-
-        $weekday = strtolower(Carbon::now()->format('D'));
-
-        return successResponse($this->payouts->runDue($weekday));
-    }
-
-    public function settings(): JsonResponse
-    {
-        $this->requireAnyPlatformPermission(self::READ);
-
-        return successResponse($this->payouts->settings());
-    }
-
-    public function updateSettings(Request $request): JsonResponse
-    {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManagePayouts);
-
-        $data = $request->validate([
-            'fee_fixed' => ['nullable', 'numeric', 'min:0'],
-            'fee_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'min_amount' => ['nullable', 'numeric', 'min:0'],
-            'required_approvals' => ['nullable', 'integer', 'min:1', 'max:5'],
-            'days' => ['nullable', 'array', 'max:7'],
-            'days.*' => ['in:sun,mon,tue,wed,thu,fri,sat'],
-        ]);
-
-        return successResponse($this->payouts->saveSettings($data), __('api.updated_success'));
+        return successResponse(wrapPaginate($query, PayoutSettlementResource::class));
     }
 
     public function show(PayoutSettlement $settlement): JsonResponse
     {
-        $this->requireAnyPlatformPermission(self::READ);
+        $settlement->load([
+            'organization:id,name',
+            'payments:id,order_id,amount,settlement_id,created_at',
+            'approvals',
+        ]);
 
-        $settlement->load(['payments:id,order_id,amount,settlement_id,created_at', 'approvals']);
-        $data = $settlement->toArray();
-        $data['bank_snapshot'] = $this->presentBank($settlement);
-
-        return successResponse($data);
+        return successResponse(new PayoutSettlementResource($settlement));
     }
 
-    public function approve(Request $request, PayoutSettlement $settlement): JsonResponse
+    public function store(StorePayoutBatchRequest $request): JsonResponse
     {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManagePayouts);
-        $data = $request->validate(['note' => ['nullable', 'string', 'max:500']]);
+        $settlement = $this->payouts->createBatch(
+            $request->organization(),
+            $this->admin()->getKey(),
+            $request->fee(),
+            note: $request->note(),
+        );
 
-        return successResponse($this->payouts->approve($settlement, $this->admin(), $data['note'] ?? null), __('api.updated_success'));
+        return successResponse(new PayoutSettlementResource($settlement), __('api.created_success'), 201);
     }
 
-    public function reject(Request $request, PayoutSettlement $settlement): JsonResponse
+    public function balances(): JsonResponse
     {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManagePayouts);
-        $data = $request->validate(['reason' => ['nullable', 'string', 'max:500']]);
-
-        return successResponse($this->payouts->reject($settlement, $this->admin(), $data['reason'] ?? null), __('api.updated_success'));
+        return successResponse($this->payouts->balances());
     }
-
-    public function fee(Request $request, PayoutSettlement $settlement): JsonResponse
-    {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManagePayouts);
-        $data = $request->validate(['fee' => ['required', 'numeric', 'min:0']]);
-
-        return successResponse($this->payouts->updateFee($settlement, (float) $data['fee']), __('api.updated_success'));
-    }
-
-    public function sent(Request $request, PayoutSettlement $settlement): JsonResponse
-    {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManagePayouts);
-        $data = $request->validate(['transfer_ref' => ['required', 'string', 'max:120']]);
-
-        return successResponse($this->payouts->markSent($settlement, $this->admin(), $data['transfer_ref']), __('api.updated_success'));
-    }
-
-    public function cancel(Request $request, PayoutSettlement $settlement): JsonResponse
-    {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManagePayouts);
-        $data = $request->validate(['reason' => ['nullable', 'string', 'max:500']]);
-
-        return successResponse($this->payouts->cancel($settlement, $data['reason'] ?? null), __('api.updated_success'));
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Helper Methods
-    |--------------------------------------------------------------------------
-    */
 
     /**
-     * Full IBAN only for the transfer executor; masked for a finance viewer.
-     *
-     * @return array<string, mixed>|null
+     * Run today's scheduled draw.
      */
-    private function presentBank(PayoutSettlement $settlement): ?array
+    public function runDue(): JsonResponse
     {
-        $bank = $settlement->bank_snapshot;
+        return successResponse($this->payouts->runDue(strtolower(Carbon::now()->format('D'))));
+    }
 
-        if (! is_array($bank)) {
-            return null;
-        }
+    public function settings(): JsonResponse
+    {
+        return successResponse($this->payouts->settings());
+    }
 
-        if (! $this->platform->has($this->admin(), PlatformPermissionEnum::ManagePayouts)) {
-            $iban = (string) ($bank['iban'] ?? '');
-            $bank['iban'] = $iban === '' ? '' : '****'.substr($iban, -4);
-        }
+    public function updateSettings(PayoutSettingsRequest $request): JsonResponse
+    {
+        return successResponse($this->payouts->saveSettings($request->validated()), __('api.updated_success'));
+    }
 
-        return $bank;
+    public function approve(PayoutDecisionRequest $request, PayoutSettlement $settlement): JsonResponse
+    {
+        $settlement = $this->payouts->approve($settlement, $this->admin(), $request->note());
+
+        return successResponse(new PayoutSettlementResource($settlement), __('api.updated_success'));
+    }
+
+    public function reject(PayoutDecisionRequest $request, PayoutSettlement $settlement): JsonResponse
+    {
+        $settlement = $this->payouts->reject($settlement, $this->admin(), $request->reason());
+
+        return successResponse(new PayoutSettlementResource($settlement), __('api.updated_success'));
+    }
+
+    public function fee(UpdatePayoutFeeRequest $request, PayoutSettlement $settlement): JsonResponse
+    {
+        $settlement = $this->payouts->updateFee($settlement, $request->fee());
+
+        return successResponse(new PayoutSettlementResource($settlement), __('api.updated_success'));
+    }
+
+    public function sent(MarkPayoutSentRequest $request, PayoutSettlement $settlement): JsonResponse
+    {
+        $settlement = $this->payouts->markSent($settlement, $this->admin(), $request->transferRef());
+
+        return successResponse(new PayoutSettlementResource($settlement), __('api.updated_success'));
+    }
+
+    public function cancel(PayoutDecisionRequest $request, PayoutSettlement $settlement): JsonResponse
+    {
+        $settlement = $this->payouts->cancel($settlement, $request->reason());
+
+        return successResponse(new PayoutSettlementResource($settlement), __('api.updated_success'));
+    }
+
+    private function admin(): User
+    {
+        /** @var User $user */
+        $user = request()->user();
+
+        return $user;
     }
 }

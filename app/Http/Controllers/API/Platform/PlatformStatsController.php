@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers\API\Platform;
 
-use App\Enum\Tenancy\PlatformPermissionEnum;
+use App\Http\Controllers\API\BaseController;
 use App\Services\Platform\PlatformStatsService;
 use Illuminate\Http\JsonResponse;
 
 /**
- * Cross-tenant KPIs and recurring-revenue analytics for the platform operator.
+ * Cross-tenant KPIs and recurring-revenue analytics for the platform operator. Gated on
+ * view_finance at the route.
  */
-class PlatformStatsController extends PlatformBaseController
+class PlatformStatsController extends BaseController
 {
     public function __construct(private readonly PlatformStatsService $stats)
     {
@@ -18,8 +19,6 @@ class PlatformStatsController extends PlatformBaseController
 
     public function index(): JsonResponse
     {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ViewFinance);
-
         return successResponse($this->stats->build());
     }
 }

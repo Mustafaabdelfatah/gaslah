@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\API\Tenancy\Platform;
 
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Resources\Platform\OrgEntitlementsResource;
+use App\Http\Resources\Platform\PlatformPlanResource;
+use App\Http\Resources\Platform\PlatformSubscriptionResource;
 use App\Models\PlatformPlan;
 use Illuminate\Http\JsonResponse;
 
@@ -12,27 +15,21 @@ use Illuminate\Http\JsonResponse;
 class OrgSubscriptionController extends TenantController
 {
     /**
-     * An entitlements snapshot — any staff may read it (drives feature gating + the status
-     * banner).
+     * The entitlements snapshot — readable by any staff member, since it drives feature
+     * gating and the account-status banner.
      */
     public function entitlements(): JsonResponse
     {
         $organization = $this->organization();
-        $subscription = $organization->platformSubscription;
+        $organization->loadMissing('platformSubscription.plan');
 
-        return successResponse([
-            ...$this->entitlements->snapshot($organization),
-            'read_only' => ! $this->entitlements->isActive($organization),
-            'suspended' => (bool) $organization->is_suspended,
-            'status' => $subscription?->displayStatus() ?? 'grandfathered',
-            'plan_name' => $subscription?->plan?->name,
-            'current_period_end' => $subscription?->current_period_end,
-            'trial' => $subscription?->status->value === 'trial',
-        ]);
+        return successResponse(
+            new OrgEntitlementsResource($organization, $this->entitlements->snapshot($organization)),
+        );
     }
 
     /**
-     * The full subscription view — manager only.
+     * The subscription in full, with the plans available to move to — manager only.
      */
     public function subscription(): JsonResponse
     {
@@ -41,11 +38,10 @@ class OrgSubscriptionController extends TenantController
         $subscription = $this->organization()->platformSubscription?->load('plan');
 
         return successResponse([
-            'subscription' => $subscription === null ? null : [
-                ...$subscription->toArray(),
-                'display_status' => $subscription->displayStatus(),
-            ],
-            'plans' => PlatformPlan::query()->where('is_active', true)->orderBy('sort_order')->get(),
+            'subscription' => $subscription === null ? null : new PlatformSubscriptionResource($subscription),
+            'plans' => PlatformPlanResource::collection(
+                PlatformPlan::query()->active()->orderBy('sort_order')->get(),
+            ),
         ]);
     }
 }

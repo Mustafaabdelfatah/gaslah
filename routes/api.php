@@ -95,7 +95,7 @@ Route::post('login', LoginController::class);
 Route::post('reset-password', ResetPasswordController::class);
 
 // Gaslah — public self-service tenant signup.
-Route::post('signup', [SignupController::class, 'store'])->middleware('throttle:10,1');
+Route::post('signup', [SignupController::class, 'store'])->middleware(['signup.open', 'throttle:10,1']);
 
 /*
 |--------------------------------------------------------------------------
@@ -508,7 +508,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
-    Route::get('stats', [PlatformStatsController::class, 'index']);
+    Route::get('stats', [PlatformStatsController::class, 'index'])->middleware('platform.permission:view_finance');
 
     Route::prefix('plans')->group(function () {
         Route::get('/', [AdminPlanController::class, 'index'])->middleware('platform.permission:manage_plans,view_finance');
@@ -519,10 +519,11 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
 
     Route::get('activity', [AdminTenantController::class, 'activity'])->middleware('platform.permission:manage_tenants');
 
-    Route::get('announcements', [AdminAnnouncementController::class, 'index']);
-    Route::post('announcements', [AdminAnnouncementController::class, 'store']);
-    Route::put('announcements/{announcement}', [AdminAnnouncementController::class, 'update']);
-    Route::delete('announcements/{announcement}', [AdminAnnouncementController::class, 'destroy']);
+    Route::prefix('announcements')->middleware('platform.permission:manage_announcements')->group(function () {
+        Route::delete('delete', [AdminAnnouncementController::class, 'destroy']);
+        Route::put('toggle-active', [AdminAnnouncementController::class, 'toggleActive']);
+        Route::apiResource('/', AdminAnnouncementController::class)->parameters(['' => 'announcement'])->except(['destroy']);
+    });
 
     Route::prefix('tenants')->middleware('platform.permission:manage_tenants')->group(function () {
         Route::get('/', [AdminTenantController::class, 'index']);
@@ -566,19 +567,25 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     });
 });
 
+// Payout console: finance may read, only the transfer executor may act.
 Route::middleware('auth:sanctum')->prefix('admin/payouts')->group(function () {
-    Route::get('/', [AdminPayoutController::class, 'index']);
-    Route::post('/', [AdminPayoutController::class, 'store']);
-    Route::get('balances', [AdminPayoutController::class, 'balances']);
-    Route::post('run-due', [AdminPayoutController::class, 'runDue']);
-    Route::get('settings', [AdminPayoutController::class, 'settings']);
-    Route::patch('settings', [AdminPayoutController::class, 'updateSettings']);
-    Route::get('{settlement}', [AdminPayoutController::class, 'show']);
-    Route::post('{settlement}/approve', [AdminPayoutController::class, 'approve']);
-    Route::post('{settlement}/reject', [AdminPayoutController::class, 'reject']);
-    Route::patch('{settlement}/fee', [AdminPayoutController::class, 'fee']);
-    Route::post('{settlement}/sent', [AdminPayoutController::class, 'sent']);
-    Route::post('{settlement}/cancel', [AdminPayoutController::class, 'cancel']);
+    Route::middleware('platform.permission:view_finance,manage_payouts')->group(function () {
+        Route::get('/', [AdminPayoutController::class, 'index']);
+        Route::get('balances', [AdminPayoutController::class, 'balances']);
+        Route::get('settings', [AdminPayoutController::class, 'settings']);
+        Route::get('{settlement}', [AdminPayoutController::class, 'show']);
+    });
+
+    Route::middleware('platform.permission:manage_payouts')->group(function () {
+        Route::post('/', [AdminPayoutController::class, 'store']);
+        Route::post('run-due', [AdminPayoutController::class, 'runDue']);
+        Route::patch('settings', [AdminPayoutController::class, 'updateSettings']);
+        Route::post('{settlement}/approve', [AdminPayoutController::class, 'approve']);
+        Route::post('{settlement}/reject', [AdminPayoutController::class, 'reject']);
+        Route::patch('{settlement}/fee', [AdminPayoutController::class, 'fee']);
+        Route::post('{settlement}/sent', [AdminPayoutController::class, 'sent']);
+        Route::post('{settlement}/cancel', [AdminPayoutController::class, 'cancel']);
+    });
 });
 
 /*
