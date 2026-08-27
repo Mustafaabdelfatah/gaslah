@@ -3,6 +3,7 @@
 namespace Tests\Feature\Platform;
 
 use App\Enum\Tenancy\PlatformRoleEnum;
+use App\Enum\Tenancy\StaffRoleEnum;
 use App\Models\Branch;
 use App\Models\Organization;
 use App\Models\PlatformAuditLog;
@@ -53,8 +54,8 @@ class AdminTenantApiTest extends TestCase
 
         $this->getJson("/api/admin/tenants/{$this->organization->getKey()}")
             ->assertOk()
-            ->assertJsonPath('data.organization.id', $this->organization->getKey())
-            ->assertJsonStructure(['data' => ['entitlements' => ['features', 'limits'], 'stats' => ['orders_count', 'at_risk'], 'recent_events']]);
+            ->assertJsonPath('data.tenant.id', $this->organization->getKey())
+            ->assertJsonStructure(['data' => ['tenant' => ['branches_count', 'feature_overrides'], 'entitlements' => ['features', 'limits'], 'at_risk', 'recent_events']]);
     }
 
     public function test_suspending_a_tenant_makes_it_read_only_and_is_audited(): void
@@ -84,17 +85,69 @@ class AdminTenantApiTest extends TestCase
         Sanctum::actingAs($this->owner());
 
         $this->patchJson("/api/admin/tenants/{$this->organization->getKey()}/entitlements", [
-            'feature_overrides' => ['delivery' => false, 'not_a_feature' => true],
+            'feature_overrides' => ['delivery' => false],
             'max_branches_override' => 2,
         ])->assertOk();
 
         $organization = $this->organization->fresh();
         $entitlements = app(EntitlementService::class);
 
-        // The unknown key is dropped; the real gated key is disabled.
         $this->assertFalse($entitlements->hasFeature($organization, 'delivery'));
-        $this->assertArrayNotHasKey('not_a_feature', $organization->feature_overrides);
         $this->assertSame(2, $entitlements->maxBranches($organization));
+    }
+
+    public function test_an_override_naming_an_unknown_or_core_feature_is_rejected(): void
+    {
+        Sanctum::actingAs($this->owner());
+
+        $this->patchJson("/api/admin/tenants/{$this->organization->getKey()}/entitlements", [
+            'feature_overrides' => ['not_a_feature' => true],
+        ])->assertStatus(422)->assertJsonValidationErrors('feature_overrides');
+
+        $this->assertNull($this->organization->fresh()->feature_overrides);
+    }
+
+    public function test_an_entitlement_update_only_writes_the_fields_it_was_sent(): void
+    {
+        Sanctum::actingAs($this->owner());
+        $url = "/api/admin/tenants/{$this->organization->getKey()}/entitlements";
+
+        $this->patchJson($url, ['feature_overrides' => ['delivery' => false]])->assertOk();
+        $this->patchJson($url, ['max_users_override' => 5])->assertOk();
+
+        // Raising the seat ceiling must not wipe the feature override set earlier.
+        $organization = $this->organization->fresh();
+        $this->assertSame(['delivery' => false], $organization->feature_overrides);
+        $this->assertSame(5, app(EntitlementService::class)->maxUsers($organization));
+    }
+
+    public function test_the_directory_can_be_searched_and_filtered(): void
+    {
+        [$other] = $this->createTenant();
+        $other->forceFill(['name' => 'مغسلة الفردوس', 'is_suspended' => true])->save();
+
+        Sanctum::actingAs($this->owner());
+
+        $this->getJson('/api/admin/tenants?search=الفردوس')
+            ->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.id', $other->getKey());
+
+        $this->getJson('/api/admin/tenants?is_suspended=1')
+            ->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.is_suspended', true);
+    }
+
+    public function test_the_tenant_staff_listing_is_paginated_with_roles(): void
+    {
+        $this->createStaff($this->branch, StaffRoleEnum::SuperAdmin);
+        Sanctum::actingAs($this->owner());
+
+        $this->getJson("/api/admin/tenants/{$this->organization->getKey()}/users")
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['data' => [['id', 'name', 'email', 'roles']], 'total']])
+            ->assertJsonPath('data.total', 1);
     }
 
     private function owner(): User

@@ -517,18 +517,20 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         Route::put('{plan}', [AdminPlanController::class, 'update'])->middleware('platform.permission:manage_plans');
     });
 
-    Route::get('activity', [AdminTenantController::class, 'activity']);
+    Route::get('activity', [AdminTenantController::class, 'activity'])->middleware('platform.permission:manage_tenants');
 
     Route::get('announcements', [AdminAnnouncementController::class, 'index']);
     Route::post('announcements', [AdminAnnouncementController::class, 'store']);
     Route::put('announcements/{announcement}', [AdminAnnouncementController::class, 'update']);
     Route::delete('announcements/{announcement}', [AdminAnnouncementController::class, 'destroy']);
 
-    Route::get('tenants', [AdminTenantController::class, 'index']);
-    Route::get('tenants/{organization}', [AdminTenantController::class, 'show']);
-    Route::get('tenants/{organization}/users', [AdminTenantController::class, 'users']);
-    Route::post('tenants/{organization}/suspend', [AdminTenantController::class, 'suspend']);
-    Route::patch('tenants/{organization}/entitlements', [AdminTenantController::class, 'updateEntitlements']);
+    Route::prefix('tenants')->middleware('platform.permission:manage_tenants')->group(function () {
+        Route::get('/', [AdminTenantController::class, 'index']);
+        Route::get('{organization}', [AdminTenantController::class, 'show']);
+        Route::get('{organization}/users', [AdminTenantController::class, 'users']);
+        Route::post('{organization}/suspend', [AdminTenantController::class, 'suspend']);
+        Route::patch('{organization}/entitlements', [AdminTenantController::class, 'updateEntitlements']);
+    });
 
     Route::put('tenants/{organization}/subscription', [AdminSubscriptionController::class, 'update']);
     Route::post('tenants/{organization}/start-trial', [AdminSubscriptionController::class, 'startTrial']);

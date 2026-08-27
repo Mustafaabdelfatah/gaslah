@@ -6,7 +6,6 @@ use App\Scopes\Tenancy\OrganizationScopes;
 use App\Services\Platform\PlatformBooks;
 use App\Services\Platform\PlatformConfigStore;
 use App\Trait\Global\LogsActivityOptions;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -122,30 +121,17 @@ class Organization extends BaseModel
 
     /*
     |--------------------------------------------------------------------------
-    | Scopes methods
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * Exclude the reserved platform-books organization from any tenant-facing list or
-     * count. Not a global scope — a lookup by id still returns it, since the platform's
-     * own accounting needs it.
-     */
-    public function scopeTenantsOnly(Builder $query): Builder
-    {
-        $reservedId = self::reservedBooksOrgId();
-
-        return $reservedId === null ? $query : $query->whereKeyNot($reservedId);
-    }
-
-    /*
-    |--------------------------------------------------------------------------
     | Relations methods
     |--------------------------------------------------------------------------
     */
     public function branches(): HasMany
     {
         return $this->hasMany(Branch::class);
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
     }
 
     public function platformSubscription(): HasOne

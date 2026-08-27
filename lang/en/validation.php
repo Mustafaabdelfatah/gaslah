@@ -120,6 +120,7 @@ return [
 
     'exact_length' => 'The :attribute must be exactly :length digits.',
     'invalid_model' => 'Invalid model for validation.',
+    'gated_feature_keys' => 'These feature keys cannot be overridden: :keys',
     'length_not_found' => 'Length information not found for validation.',
     /*
     |--------------------------------------------------------------------------

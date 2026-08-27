@@ -83,7 +83,7 @@ class PlatformAnnouncementApiTest extends TestCase
 
         $this->getJson("/api/admin/tenants/{$this->organization->getKey()}/users")
             ->assertOk()
-            ->assertJsonStructure(['data' => [['id', 'name', 'email', 'roles']]]);
+            ->assertJsonStructure(['data' => ['data' => [['id', 'name', 'email', 'roles']]]]);
     }
 
     private function owner(): User
