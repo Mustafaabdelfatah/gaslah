@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\Portal;
 
 use App\Enum\Delivery\DeliverySourceEnum;
+use App\Http\Requests\Portal\StorePortalDeliveryRequest;
 use App\Models\Branch;
 use App\Models\DeliveryRequest;
 use App\Models\Order;
@@ -10,7 +11,6 @@ use App\Services\Delivery\DeliveryRequestService;
 use App\Services\Delivery\DeliveryService;
 use App\Services\Delivery\DeliverySettingsService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 /**
@@ -41,19 +41,11 @@ class PortalDeliveryController extends PortalBaseController
         return successResponse($requests->map(fn (DeliveryRequest $request) => $this->present($request)));
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StorePortalDeliveryRequest $request): JsonResponse
     {
         $customer = $this->customer();
 
-        $data = $request->validate([
-            'type' => ['required', 'in:pickup,delivery,both'],
-            'address' => ['required', 'string', 'max:500'],
-            'notes' => ['nullable', 'string', 'max:500'],
-            'scheduled_at' => ['nullable', 'date', 'after:now'],
-            'order_id' => ['nullable', 'integer'],
-            'lat' => ['nullable', 'numeric', 'between:-90,90'],
-            'lng' => ['nullable', 'numeric', 'between:-180,180'],
-        ]);
+        $data = $request->validated();
 
         $organizationId = $customer->organization_id;
         $settings = $this->settings->resolve($organizationId);

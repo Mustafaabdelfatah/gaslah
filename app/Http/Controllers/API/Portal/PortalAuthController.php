@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\API\Portal;
 
 use App\Http\Controllers\API\BaseController;
+use App\Http\Requests\Portal\PortalOtpRequest;
+use App\Http\Requests\Portal\VerifyPortalOtpRequest;
 use App\Services\Portal\PortalAuthService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class PortalAuthController extends BaseController
 {
@@ -14,25 +15,14 @@ class PortalAuthController extends BaseController
         parent::__construct();
     }
 
-    public function requestOtp(Request $request): JsonResponse
+    public function requestOtp(PortalOtpRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'phone' => ['required', 'string', 'min:6', 'max:32'],
-            'org' => ['required', 'string', 'max:120'],
-        ]);
-
-        return successResponse($this->auth->requestOtp($data['org'], $data['phone']));
+        return successResponse($this->auth->requestOtp($request->org(), $request->phone()));
     }
 
-    public function verifyOtp(Request $request): JsonResponse
+    public function verifyOtp(VerifyPortalOtpRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'phone' => ['required', 'string', 'min:6', 'max:32'],
-            'org' => ['required', 'string', 'max:120'],
-            'code' => ['required', 'string'],
-        ]);
-
-        $result = $this->auth->verifyOtp($data['org'], $data['phone'], $data['code']);
+        $result = $this->auth->verifyOtp($request->org(), $request->phone(), $request->code());
 
         return successResponse([
             'token' => $result['token'],

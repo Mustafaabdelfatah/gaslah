@@ -5,7 +5,10 @@ namespace App\Http\Controllers\API\Tenancy\Delivery;
 use App\Enum\Delivery\DeliverySourceEnum;
 use App\Enum\Delivery\DeliveryStatusEnum;
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Delivery\AssignDeliveryRequest;
+use App\Http\Requests\Delivery\DeliveryActionRequest;
 use App\Http\Requests\Delivery\DeliveryInventoryRequest;
+use App\Http\Requests\Delivery\DeliverySettingsRequest;
 use App\Http\Requests\Delivery\DeliveryZoneRequest;
 use App\Http\Requests\Delivery\DriverRequest;
 use App\Http\Requests\Delivery\StoreDeliveryRequestRequest;
@@ -22,7 +25,6 @@ use App\Services\Delivery\DeliverySettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\URL;
-use Illuminate\Validation\Rules\Enum;
 
 class DeliveryController extends TenantController
 {
@@ -49,29 +51,16 @@ class DeliveryController extends TenantController
         return successResponse($this->settings->resolve($this->organizationId()));
     }
 
-    public function updateSettings(Request $request): JsonResponse
+    public function updateSettings(DeliverySettingsRequest $request): JsonResponse
     {
         // Only the general manager may change delivery configuration.
         $this->requireSuperAdmin();
         $this->requireFeature(self::FEATURE);
 
-        $data = $request->validate([
-            'methods' => ['nullable', 'array'],
-            'methods.selfDelivery' => ['nullable', 'boolean'],
-            'methods.platformDriver' => ['nullable', 'boolean'],
-            'methods.integration' => ['nullable', 'boolean'],
-            'self' => ['nullable', 'array'],
-            'self.feeMode' => ['nullable', 'in:flat,per_direction'],
-            'self.flatFee' => ['nullable', 'numeric', 'min:0'],
-            'self.pickupFee' => ['nullable', 'numeric', 'min:0'],
-            'self.deliveryFee' => ['nullable', 'numeric', 'min:0'],
-            'self.hoursFrom' => ['nullable', 'date_format:H:i'],
-            'self.hoursTo' => ['nullable', 'date_format:H:i'],
-            'self.slotMinutes' => ['nullable', 'integer', 'min:15', 'max:480'],
-            'workflow' => ['nullable', 'array'],
-        ]);
-
-        return successResponse($this->settings->save($this->organizationId(), $data), __('api.updated_success'));
+        return successResponse(
+            $this->settings->save($this->organizationId(), $request->validated()),
+            __('api.updated_success'),
+        );
     }
 
     /*
@@ -229,20 +218,13 @@ class DeliveryController extends TenantController
     /**
      * Assign a driver/external app, adjust the fee, and/or submit a status.
      */
-    public function updateRequest(Request $request, DeliveryRequest $delivery): JsonResponse
+    public function updateRequest(AssignDeliveryRequest $request, DeliveryRequest $delivery): JsonResponse
     {
         $this->staff();
         $this->requireFeature(self::FEATURE);
         $this->assertInReadScope($delivery);
 
-        $data = $request->validate([
-            'driver_id' => ['nullable', 'integer'],
-            'external_provider' => ['nullable', 'string', 'max:60'],
-            'external_ref' => ['nullable', 'string', 'max:120'],
-            'fee' => ['nullable', 'numeric', 'min:0'],
-            'status' => ['nullable', new Enum(DeliveryStatusEnum::class)],
-            'note' => ['nullable', 'string', 'max:500'],
-        ]);
+        $data = $request->validated();
 
         $settings = $this->settings->resolve($this->organizationId());
 
@@ -266,22 +248,17 @@ class DeliveryController extends TenantController
     /**
      * Unified staff action: confirm arrival, or flag invoice approval.
      */
-    public function requestAction(Request $request, DeliveryRequest $delivery): JsonResponse
+    public function requestAction(DeliveryActionRequest $request, DeliveryRequest $delivery): JsonResponse
     {
         $this->staff();
         $this->requireFeature(self::FEATURE);
         $this->assertInReadScope($delivery);
 
-        $data = $request->validate([
-            'action' => ['required', 'in:arrive,require_invoice_approval'],
-            'require' => ['nullable', 'boolean'],
-        ]);
-
         $userId = $this->staff()->getKey();
 
-        $delivery = match ($data['action']) {
+        $delivery = match ($request->action()) {
             'arrive' => $this->requests->arrive($delivery, $userId),
-            'require_invoice_approval' => $this->requests->requireInvoiceApproval($delivery, (bool) ($data['require'] ?? true), $userId),
+            'require_invoice_approval' => $this->requests->requireInvoiceApproval($delivery, $request->requiresApproval(), $userId),
         };
 
         return successResponse($delivery, __('api.updated_success'));

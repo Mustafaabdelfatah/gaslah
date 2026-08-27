@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\API\Affiliate;
 
 use App\Http\Controllers\API\BaseController;
+use App\Http\Requests\Affiliate\AffiliateOtpRequest;
+use App\Http\Requests\Affiliate\RegisterAffiliateRequest;
+use App\Http\Requests\Affiliate\VerifyAffiliateOtpRequest;
 use App\Models\Affiliate;
 use App\Services\Affiliate\AffiliateAuthService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class AffiliateAuthController extends BaseController
 {
@@ -15,31 +17,21 @@ class AffiliateAuthController extends BaseController
         parent::__construct();
     }
 
-    public function register(Request $request): JsonResponse
+    public function register(RegisterAffiliateRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'min:2', 'max:200'],
-            'email' => ['required', 'email', 'max:255', 'unique:affiliates,email'],
-            'phone' => ['required', 'string', 'min:6', 'max:32', 'unique:affiliates,phone'],
-        ]);
-
-        $result = $this->auth->register($data);
+        $result = $this->auth->register($request->validated());
 
         return successResponse(['token' => $result['token'], 'affiliate' => $result['affiliate']->only('id', 'name', 'code')], __('api.created_success'), 201);
     }
 
-    public function requestOtp(Request $request): JsonResponse
+    public function requestOtp(AffiliateOtpRequest $request): JsonResponse
     {
-        $data = $request->validate(['phone' => ['required', 'string', 'max:32']]);
-
-        return successResponse($this->auth->requestOtp($data['phone']));
+        return successResponse($this->auth->requestOtp($request->phone()));
     }
 
-    public function verifyOtp(Request $request): JsonResponse
+    public function verifyOtp(VerifyAffiliateOtpRequest $request): JsonResponse
     {
-        $data = $request->validate(['phone' => ['required', 'string', 'max:32'], 'code' => ['required', 'string']]);
-
-        $result = $this->auth->verifyOtp($data['phone'], $data['code']);
+        $result = $this->auth->verifyOtp($request->phone(), $request->code());
 
         return successResponse(['token' => $result['token'], 'affiliate' => $result['affiliate']->only('id', 'name', 'code')]);
     }

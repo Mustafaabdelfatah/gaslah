@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\Payments;
 
 use App\Http\Controllers\API\BaseController;
+use App\Http\Requests\Payments\PayOrderRequest;
 use App\Models\Order;
 use App\Services\Payments\OnlinePaymentService;
 use App\Services\Payments\PaymentWebhookService;
@@ -37,21 +38,15 @@ class PayController extends BaseController
     /**
      * Execute a gateway payment for a token.
      */
-    public function pay(Request $request, string $token): JsonResponse
+    public function pay(PayOrderRequest $request, string $token): JsonResponse
     {
         $order = $this->resolveOrder($token);
 
-        $data = $request->validate([
-            'channel' => ['nullable', 'in:mada,card,stcpay,applepay'],
-            'amount' => ['nullable', 'numeric', 'gt:0', 'max:1000000'],
-            'payment_ref' => ['nullable', 'string', 'max:255'],
-        ]);
-
         $result = $this->payments->pay(
             $order,
-            $data['channel'] ?? 'card',
-            isset($data['amount']) ? (float) $data['amount'] : null,
-            $data['payment_ref'] ?? null,
+            $request->channel(),
+            $request->amount(),
+            $request->paymentRef(),
         );
 
         return successResponse($result);

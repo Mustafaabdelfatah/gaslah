@@ -3,9 +3,10 @@
 namespace App\Http\Controllers\API\Driver;
 
 use App\Http\Controllers\API\BaseController;
+use App\Http\Requests\Driver\DriverOtpRequest;
+use App\Http\Requests\Driver\VerifyDriverOtpRequest;
 use App\Services\Delivery\DriverAuthService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class DriverAuthController extends BaseController
 {
@@ -14,21 +15,14 @@ class DriverAuthController extends BaseController
         parent::__construct();
     }
 
-    public function requestOtp(Request $request): JsonResponse
+    public function requestOtp(DriverOtpRequest $request): JsonResponse
     {
-        $data = $request->validate(['phone' => ['required', 'string', 'max:32']]);
-
-        return successResponse($this->auth->requestOtp($data['phone']));
+        return successResponse($this->auth->requestOtp($request->phone()));
     }
 
-    public function verifyOtp(Request $request): JsonResponse
+    public function verifyOtp(VerifyDriverOtpRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'phone' => ['required', 'string', 'max:32'],
-            'code' => ['required', 'string'],
-        ]);
-
-        $result = $this->auth->verifyOtp($data['phone'], $data['code']);
+        $result = $this->auth->verifyOtp($request->phone(), $request->code());
 
         return successResponse([
             'token' => $result['token'],

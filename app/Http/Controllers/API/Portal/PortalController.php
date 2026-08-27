@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\API\Portal;
 
+use App\Http\Requests\Portal\StoreCustomerAddressRequest;
 use App\Models\CustomerAddress;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrgAnnouncement;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -107,19 +107,12 @@ class PortalController extends PortalBaseController
         return successResponse($addresses);
     }
 
-    public function storeAddress(Request $request): JsonResponse
+    public function storeAddress(StoreCustomerAddressRequest $request): JsonResponse
     {
         $customer = $this->customer();
 
-        $data = $request->validate([
-            'label' => ['required', 'string', 'max:40'],
-            'district' => ['nullable', 'string', 'max:80'],
-            'street' => ['nullable', 'string', 'max:160'],
-            'details' => ['nullable', 'string', 'max:200'],
-            'is_default' => ['nullable', 'boolean'],
-        ]);
-
-        $makeDefault = (bool) ($data['is_default'] ?? false);
+        $data = $request->validated();
+        $makeDefault = $request->shouldBecomeDefault();
 
         // Setting a default must clear the others in the same transaction, so we never
         // end with two defaults or none.
