@@ -5,12 +5,13 @@ namespace App\Http\Controllers\API\Tenancy\Messaging;
 use App\Enum\Messaging\WaCategoryEnum;
 use App\Enum\Messaging\WaEventEnum;
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Messaging\SendTestMessageRequest;
+use App\Http\Requests\Messaging\WaTemplateRequest;
 use App\Models\WaMessage;
 use App\Models\WaTemplate;
 use App\Services\Messaging\WaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rules\Enum;
 
 /**
  * The organization's WhatsApp screen. Reads need the messaging feature; writes add
@@ -86,13 +87,13 @@ class WaController extends TenantController
         ]);
     }
 
-    public function storeTemplate(Request $request): JsonResponse
+    public function storeTemplate(WaTemplateRequest $request): JsonResponse
     {
         $this->requireManager();
         $this->requireFeature(self::FEATURE);
 
         $template = WaTemplate::query()->create([
-            ...$this->validateTemplate($request),
+            ...$request->validated(),
             'organization_id' => $this->organizationId(),
             'created_by_id' => $this->staff()->getKey(),
         ]);
@@ -100,13 +101,13 @@ class WaController extends TenantController
         return successResponse($template, __('api.created_success'), 201);
     }
 
-    public function updateTemplate(Request $request, WaTemplate $template): JsonResponse
+    public function updateTemplate(WaTemplateRequest $request, WaTemplate $template): JsonResponse
     {
         $this->requireManager();
         $this->requireFeature(self::FEATURE);
         $this->assertOwned($template);
 
-        $template->update($this->validateTemplate($request, updating: true));
+        $template->update($request->validated());
 
         return successResponse($template->refresh(), __('api.updated_success'));
     }
@@ -125,17 +126,15 @@ class WaController extends TenantController
     /**
      * Send a test message rendered with dummy variables.
      */
-    public function test(Request $request): JsonResponse
+    public function test(SendTestMessageRequest $request): JsonResponse
     {
         $this->requireManager();
         $this->requireFeature(self::FEATURE);
 
-        $data = $request->validate(['phone' => ['required', 'string', 'max:32']]);
-
         $message = $this->wa->queue([
             'organization_id' => $this->organizationId(),
             'branch_id' => $this->writeBranchId(),
-            'to_phone' => $data['phone'],
+            'to_phone' => $request->phone(),
             'category' => WaEventEnum::Test->category(),
             'event_key' => WaEventEnum::Test->value,
             'body' => $this->wa->render(
@@ -166,21 +165,5 @@ class WaController extends TenantController
             ->get()
             ->map(fn ($r) => ['key' => $r->k instanceof \BackedEnum ? $r->k->value : $r->k, 'count' => (int) $r->c])
             ->all();
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function validateTemplate(Request $request, bool $updating = false): array
-    {
-        $required = $updating ? 'sometimes' : 'required';
-
-        return $request->validate([
-            'name' => [$required, 'string', 'min:1', 'max:120'],
-            'category' => [$required, new Enum(WaCategoryEnum::class)],
-            'event_key' => ['nullable', new Enum(WaEventEnum::class)],
-            'body' => [$required, 'string', 'max:2000'],
-            'is_active' => ['nullable', 'boolean'],
-        ]);
     }
 }

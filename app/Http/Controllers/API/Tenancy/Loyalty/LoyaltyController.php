@@ -3,16 +3,16 @@
 namespace App\Http\Controllers\API\Tenancy\Loyalty;
 
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Loyalty\AdjustPointsRequest;
+use App\Http\Requests\Loyalty\LoyaltyProgramRequest;
+use App\Http\Requests\Loyalty\RedeemPointsRequest;
 use App\Models\Customer;
 use App\Models\LoyaltyProgram;
 use App\Services\Loyalty\LoyaltyService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class LoyaltyController extends TenantController
 {
-    private const FEATURE = 'loyalty';
-
     public function __construct(private readonly LoyaltyService $loyalty)
     {
         parent::__construct();
@@ -23,8 +23,6 @@ class LoyaltyController extends TenantController
      */
     public function program(): JsonResponse
     {
-        $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         $program = $this->loyalty->resolveProgram($this->organizationId());
 
@@ -38,20 +36,10 @@ class LoyaltyController extends TenantController
         ]);
     }
 
-    public function updateProgram(Request $request): JsonResponse
+    public function updateProgram(LoyaltyProgramRequest $request): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
 
-        $data = $request->validate([
-            'name' => ['required', 'string', 'min:2', 'max:200'],
-            'earn_rate' => ['required', 'numeric', 'min:0', 'max:10000'],
-            'point_value' => ['required', 'numeric', 'min:0', 'max:10000'],
-            'expiry_months' => ['nullable', 'integer', 'min:1', 'max:120'],
-            'is_active' => ['nullable', 'boolean'],
-        ]);
-
-        $program = $this->loyalty->saveProgram($this->organizationId(), $data);
+        $program = $this->loyalty->saveProgram($this->organizationId(), $request->validated());
 
         return successResponse($program, __('api.updated_success'));
     }
@@ -61,8 +49,6 @@ class LoyaltyController extends TenantController
      */
     public function accounts(): JsonResponse
     {
-        $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         return successResponse($this->loyalty->accounts($this->organizationId(), $this->readBranchIds()));
     }
@@ -70,20 +56,13 @@ class LoyaltyController extends TenantController
     /**
      * Manually adjust a customer's points (positive or negative).
      */
-    public function adjust(Request $request, Customer $customer): JsonResponse
+    public function adjust(AdjustPointsRequest $request, Customer $customer): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
         $this->assertOwned($customer);
-
-        $data = $request->validate([
-            'points' => ['required', 'numeric', 'not_in:0', 'between:-1000000,1000000'],
-            'note' => ['nullable', 'string', 'max:300'],
-        ]);
 
         $program = $this->requireSavedProgram();
 
-        $account = $this->loyalty->adjust($customer, $program, (float) $data['points'], $data['note'] ?? null);
+        $account = $this->loyalty->adjust($customer, $program, $request->points(), $request->note());
 
         return successResponse([
             'points_balance' => $account->points_balance,
@@ -94,19 +73,13 @@ class LoyaltyController extends TenantController
     /**
      * Redeem a customer's points for wallet value.
      */
-    public function redeem(Request $request, Customer $customer): JsonResponse
+    public function redeem(RedeemPointsRequest $request, Customer $customer): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
         $this->assertOwned($customer);
-
-        $data = $request->validate([
-            'points' => ['required', 'numeric', 'gt:0', 'max:1000000'],
-        ]);
 
         $program = $this->requireSavedProgram();
 
-        $result = $this->loyalty->redeem($customer, $program, (float) $data['points']);
+        $result = $this->loyalty->redeem($customer, $program, $request->points());
 
         return successResponse($result, __('api.updated_success'));
     }

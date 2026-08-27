@@ -340,15 +340,19 @@ Route::middleware(['auth:sanctum'])->group(function () {
     | Gaslah — Loyalty (staff, feature: loyalty)
     |--------------------------------------------------------------------------
     */
-    Route::prefix('loyalty')->group(function () {
+    Route::prefix('loyalty')->middleware('tenant:feature,loyalty')->group(function () {
         Route::get('program', [LoyaltyController::class, 'program']);
-        Route::put('program', [LoyaltyController::class, 'updateProgram']);
         Route::get('accounts', [LoyaltyController::class, 'accounts']);
-        Route::post('accounts/{customer}/adjust', [LoyaltyController::class, 'adjust']);
+
+        Route::middleware('tenant:manager')->group(function () {
+            Route::put('program', [LoyaltyController::class, 'updateProgram']);
+            Route::post('accounts/{customer}/adjust', [LoyaltyController::class, 'adjust']);
+        });
     });
 
     // Redeem points for wallet value — customer-scoped path per the spec.
-    Route::post('customers/{customer}/loyalty/redeem', [LoyaltyController::class, 'redeem']);
+    Route::post('customers/{customer}/loyalty/redeem', [LoyaltyController::class, 'redeem'])
+        ->middleware(['tenant:feature,loyalty', 'tenant:manager']);
 
     /*
     |--------------------------------------------------------------------------

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\API\Tenancy\Community;
 
 use App\Enum\Forum\ForumStatusEnum;
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Community\StoreForumPostRequest;
+use App\Http\Requests\Community\StoreForumThreadRequest;
 use App\Models\ForumCategory;
 use App\Models\ForumPost;
 use App\Models\ForumThread;
@@ -57,18 +59,11 @@ class ForumController extends TenantController
         return successResponse($thread);
     }
 
-    public function storeThread(Request $request): JsonResponse
+    public function storeThread(StoreForumThreadRequest $request): JsonResponse
     {
         $user = $this->staff();
 
-        $data = $request->validate([
-            'category_id' => ['required', 'integer'],
-            'title' => ['required', 'string', 'min:3', 'max:300'],
-            'body' => ['required', 'string', 'min:1', 'max:10000'],
-        ]);
-
-        $category = ForumCategory::query()->where('is_active', true)->find($data['category_id']);
-        abort_if($category === null, 422, __('api.forum_category_invalid'));
+        $data = $request->validated();
 
         // A moderation-queue cap per author.
         $pending = ForumThread::query()->where('author_id', $user->getKey())->where('status', ForumStatusEnum::Pending->value)->count();
@@ -76,7 +71,7 @@ class ForumController extends TenantController
 
         $thread = ForumThread::query()->create([
             'organization_id' => $this->organizationId(),
-            'category_id' => $category->getKey(),
+            'category_id' => $data['category_id'],
             'title' => $data['title'],
             'slug' => $this->slug($data['title']),
             'body' => $data['body'],
@@ -88,19 +83,17 @@ class ForumController extends TenantController
         return successResponse($thread, __('api.forum_thread_pending'), 201);
     }
 
-    public function storePost(Request $request, ForumThread $thread): JsonResponse
+    public function storePost(StoreForumPostRequest $request, ForumThread $thread): JsonResponse
     {
         $user = $this->staff();
 
         abort_unless($thread->status === ForumStatusEnum::Approved, 404, __('api.record_not_found'));
         abort_if($thread->is_closed, 422, __('api.forum_thread_closed'));
 
-        $data = $request->validate(['body' => ['required', 'string', 'min:1', 'max:10000']]);
-
         $post = ForumPost::query()->create([
             'thread_id' => $thread->getKey(),
             'author_id' => $user->getKey(),
-            'body' => $data['body'],
+            'body' => $request->body(),
             'status' => ForumStatusEnum::Approved->value,
         ]);
 
