@@ -11,8 +11,6 @@ use App\Models\PlatformPlan;
 use App\Models\PlatformSubscription;
 use App\Models\SubscriptionInvoice;
 use App\Support\Zatca;
-use App\Support\ZatcaPhase2;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
@@ -28,18 +26,9 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class SubscriptionInvoicer
 {
-    private const MAX_ATTEMPTS = 8;
-
-    /**
-     * VAT is 15% of the net, i.e. 15/115 of the tax-inclusive total.
-     */
-    private const VAT_NUMERATOR = 15;
-
-    private const VAT_DENOMINATOR = 115;
-
     public function __construct(
         private readonly PlatformBooks $books,
-        private readonly PlatformConfigStore $config,
+        private readonly PlatformInvoiceChain $chain,
     ) {}
 
     /**
@@ -90,10 +79,8 @@ class SubscriptionInvoicer
         ?PlatformSubscription $subscription = null,
         ?int $chargeId = null,
     ): SubscriptionInvoice {
-        $total = round($manualTotal ?? $this->planPrice($plan, $cycle), 2);
-        $vat = round($total * self::VAT_NUMERATOR / self::VAT_DENOMINATOR, 2);
-        $subtotal = round($total - $vat, 2);
-        $seller = $this->seller();
+        $money = $this->chain->splitInclusive($manualTotal ?? $this->planPrice($plan, $cycle));
+        $seller = $this->chain->seller();
 
         return SubscriptionInvoice::query()->create([
             'organization_id' => $organization->getKey(),
@@ -105,9 +92,9 @@ class SubscriptionInvoicer
             'buyer_vat' => $organization->vat_number,
             'plan_name' => $plan->name,
             'cycle' => $cycle->value,
-            'subtotal' => $subtotal,
-            'vat' => $vat,
-            'total' => $total,
+            'subtotal' => $money['subtotal'],
+            'vat' => $money['vat'],
+            'total' => $money['total'],
             'payment_method' => $method->value,
             'bank_name' => $paymentMeta['bank_name'] ?? null,
             'transfer_ref' => $paymentMeta['transfer_ref'] ?? null,
@@ -125,61 +112,16 @@ class SubscriptionInvoicer
     {
         abort_unless($invoice->isDraft(), Response::HTTP_CONFLICT, __('api.invoice_already_issued'));
 
-        for ($attempt = 0; $attempt < self::MAX_ATTEMPTS; $attempt++) {
-            $last = SubscriptionInvoice::query()->issued()->orderByDesc('icv')->first();
-            $icv = ($last?->icv ?? 0) + 1;
-            $pih = $last?->hash ?? ZatcaPhase2::GENESIS_PIH;
+        /** @var SubscriptionInvoice $issued */
+        $issued = $this->chain->issue(
+            $invoice,
+            SubscriptionInvoice::query()->issued(),
+            fn (SubscriptionInvoice $draft, int $icv, string $pih, string $timestamp) => $this->canonical($draft, $icv, $pih, $timestamp),
+            fn (SubscriptionInvoice $confirmed) => $this->books->postRevenue($confirmed),
+            $adminId,
+        );
 
-            $seller = $this->seller();
-            $timestamp = Zatca::timestamp(Carbon::now());
-            $canonical = $this->canonical($invoice, $icv, $pih, $timestamp);
-            $hash = ZatcaPhase2::sha256Base64($canonical);
-            $qr = ZatcaPhase2::qrPayloadV2(
-                $seller['name'],
-                (string) $seller['vat'],
-                $timestamp,
-                Zatca::money((float) $invoice->total),
-                Zatca::money((float) $invoice->vat),
-                $hash,
-            );
-
-            try {
-                return DB::transaction(function () use ($invoice, $icv, $pih, $hash, $qr, $adminId) {
-                    $now = Carbon::now();
-
-                    // Compare-and-swap: only a still-draft row is claimed. A second confirm
-                    // (double click, two accountants) updates zero rows and loses the race.
-                    $affected = SubscriptionInvoice::query()
-                        ->whereKey($invoice->getKey())
-                        ->where('status', SubscriptionInvoiceStatusEnum::Draft->value)
-                        ->update([
-                            'icv' => $icv,
-                            'invoice_no' => $icv,
-                            'pih' => $pih,
-                            'hash' => $hash,
-                            'qr' => $qr,
-                            'status' => SubscriptionInvoiceStatusEnum::Issued->value,
-                            'confirmed_at' => $now,
-                            'confirmed_by_id' => $adminId,
-                            'issued_at' => $now,
-                        ]);
-
-                    abort_if($affected === 0, Response::HTTP_CONFLICT, __('api.invoice_already_issued'));
-
-                    $fresh = $invoice->fresh();
-                    $this->books->postRevenue($fresh);
-
-                    return $fresh;
-                });
-            } catch (QueryException $exception) {
-                // A concurrent confirm took this ICV first; recompute and retry.
-                if (! $this->isDuplicateKey($exception) || $attempt >= self::MAX_ATTEMPTS - 1) {
-                    throw $exception;
-                }
-            }
-        }
-
-        abort(Response::HTTP_SERVICE_UNAVAILABLE, __('api.invoice_issue_failed'));
+        return $issued;
     }
 
     /**
@@ -221,7 +163,7 @@ class SubscriptionInvoicer
      */
     private function canonical(SubscriptionInvoice $invoice, int $icv, string $pih, string $timestamp): string
     {
-        $seller = $this->seller();
+        $seller = $this->chain->seller();
 
         return implode('|', [
             'SUB',
@@ -238,27 +180,5 @@ class SubscriptionInvoicer
             Zatca::money((float) $invoice->vat),
             Zatca::money((float) $invoice->total),
         ]);
-    }
-
-    /**
-     * The seller identity (the SaaS operator), read from the platform config with env
-     * fallbacks.
-     *
-     * @return array{name: string, vat: string|null}
-     */
-    private function seller(): array
-    {
-        $platform = $this->config->get('platform', []);
-        $platform = is_array($platform) ? $platform : [];
-
-        return [
-            'name' => (string) ($platform['sellerName'] ?? config('app.name', 'Gaslah')),
-            'vat' => $platform['sellerVat'] ?? config('services.platform.seller_vat'),
-        ];
-    }
-
-    private function isDuplicateKey(QueryException $exception): bool
-    {
-        return in_array($exception->getCode(), ['23000', '23505'], true);
     }
 }

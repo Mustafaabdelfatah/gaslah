@@ -22,6 +22,8 @@ use App\Http\Controllers\API\Messaging\WaWebhookController;
 use App\Http\Controllers\API\Payments\PayController;
 use App\Http\Controllers\API\Platform\AdminAnnouncementController;
 use App\Http\Controllers\API\Platform\AdminCouponController;
+use App\Http\Controllers\API\Platform\AdminDeviceController;
+use App\Http\Controllers\API\Platform\AdminDeviceSaleController;
 use App\Http\Controllers\API\Platform\AdminDunningController;
 use App\Http\Controllers\API\Platform\AdminInvoiceController;
 use App\Http\Controllers\API\Platform\AdminPayoutController;
@@ -603,6 +605,30 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         Route::get('activity', [AdminDunningController::class, 'activity']);
         Route::put('/', [AdminDunningController::class, 'update']);
         Route::post('run', [AdminDunningController::class, 'run']);
+    });
+
+    // Hardware catalogue: any admin reads it (it feeds the sale form), pricing is a
+    // commercial decision. Devices retire through is_active, never delete — past
+    // invoices name them.
+    Route::prefix('devices')->group(function () {
+        Route::get('/', [AdminDeviceController::class, 'index']);
+        Route::get('{device}', [AdminDeviceController::class, 'show']);
+
+        Route::middleware('platform.permission:manage_subscriptions')->group(function () {
+            Route::post('/', [AdminDeviceController::class, 'store']);
+            Route::put('{device}', [AdminDeviceController::class, 'update']);
+            Route::put('toggle-active', [AdminDeviceController::class, 'toggleActive']);
+        });
+    });
+
+    // Device sales — the DEV- ZATCA series, split across the same three permissions as
+    // subscription invoices.
+    Route::prefix('device-sales')->group(function () {
+        Route::get('/', [AdminDeviceSaleController::class, 'index'])->middleware('platform.permission:view_finance');
+        Route::get('{sale}', [AdminDeviceSaleController::class, 'show'])->middleware('platform.permission:view_finance');
+        Route::post('/', [AdminDeviceSaleController::class, 'store'])->middleware('platform.permission:manage_subscriptions');
+        Route::post('{sale}/confirm', [AdminDeviceSaleController::class, 'confirm'])->middleware('platform.permission:manage_accounting');
+        Route::delete('{sale}', [AdminDeviceSaleController::class, 'destroy'])->middleware('platform.permission:manage_subscriptions');
     });
 
     // Subscription coupons.

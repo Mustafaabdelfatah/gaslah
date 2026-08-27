@@ -23,6 +23,12 @@ enum SystemAccountEnum: string
     case RetainedEarnings = 'retained';
     case Sales = 'sales';
     case SalesDiscounts = 'sales_discounts';
+
+    /**
+     * Platform-books only: hardware the operator sells sits apart from subscription
+     * revenue, so the SaaS income statement can tell recurring from one-off.
+     */
+    case DeviceSales = 'device_sales';
     case OperatingExpenses = 'opex';
     case Payroll = 'payroll';
     case Rent = 'rent';
