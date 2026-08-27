@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\API\Affiliate;
 
 use App\Enum\Affiliate\AffiliateReferralStatusEnum;
+use App\Http\Requests\Global\Other\PageRequest;
+use App\Http\Resources\Affiliate\AffiliateReferralResource;
 use App\Models\AffiliateReferral;
 use Illuminate\Http\JsonResponse;
 
@@ -32,25 +34,13 @@ class AffiliateController extends AffiliateBaseController
         ]);
     }
 
-    public function referrals(): JsonResponse
+    public function referrals(PageRequest $request): JsonResponse
     {
-        $referrals = $this->affiliate()->referrals()
+        $query = AffiliateReferral::query()
+            ->where('affiliate_id', $this->affiliate()->getKey())
             ->with('organization:id,name')
-            ->latest('id')
-            ->limit(100)
-            ->get();
+            ->latest('id');
 
-        $data = $referrals->map(fn (AffiliateReferral $r) => [
-            'id' => $r->getKey(),
-            'organization' => $r->organization?->name,
-            'plan_name' => $r->plan_name,
-            'sub_amount' => round((float) $r->sub_amount, 2),
-            'commission' => round((float) $r->commission, 2),
-            'status' => $r->status->value,
-            'paid_at' => $r->paid_at,
-            'created_at' => $r->created_at,
-        ]);
-
-        return successResponse($data);
+        return successResponse(wrapPaginate($query, AffiliateReferralResource::class));
     }
 }

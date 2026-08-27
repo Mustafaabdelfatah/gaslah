@@ -5,6 +5,9 @@ namespace App\Http\Controllers\API\Driver;
 use App\Http\Requests\Driver\AdvanceDeliveryRequest;
 use App\Http\Requests\Driver\RejectDeliveryRequest;
 use App\Http\Requests\Driver\StoreDeliveryPhotoRequest;
+use App\Http\Requests\Global\Other\PageRequest;
+use App\Http\Resources\Delivery\DriverJobResource;
+use App\Models\DeliveryRequest;
 use App\Services\Delivery\DriverService;
 use Illuminate\Http\JsonResponse;
 
@@ -23,16 +26,17 @@ class DriverController extends DriverBaseController
     /**
      * The driver's own requests — open ones first, then most recent (up to 100).
      */
-    public function requests(): JsonResponse
+    public function requests(PageRequest $request): JsonResponse
     {
-        $requests = $this->driver()->requests()
+        // Live jobs first: a driver opens the app to see what is still on their hands, not
+        // what they finished yesterday.
+        $query = DeliveryRequest::query()
+            ->where('driver_id', $this->driver()->getKey())
             ->with(['customer:id,name,phone', 'order:id,order_no,grand_total,payment_status'])
             ->orderByRaw("CASE WHEN status IN ('assigned','picked_up','out_for_delivery') THEN 0 ELSE 1 END")
-            ->latest('id')
-            ->limit(100)
-            ->get();
+            ->latest('id');
 
-        return successResponse($requests);
+        return successResponse(wrapPaginate($query, DriverJobResource::class));
     }
 
     public function accept(int $id): JsonResponse

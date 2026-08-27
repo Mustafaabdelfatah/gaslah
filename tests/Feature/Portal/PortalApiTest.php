@@ -90,7 +90,7 @@ class PortalApiTest extends TestCase
         $mine = Order::factory()->create(['organization_id' => $this->organization->getKey(), 'branch_id' => $this->branch->getKey(), 'customer_id' => $this->customer->getKey()]);
         $foreign = Order::factory()->create(['organization_id' => $this->organization->getKey(), 'branch_id' => $this->branch->getKey()]);
 
-        $ids = collect($this->getJson('/api/portal/orders')->assertOk()->json('data'))->pluck('id');
+        $ids = collect($this->getJson('/api/portal/orders')->assertOk()->json('data.data'))->pluck('id');
         $this->assertTrue($ids->contains($mine->getKey()));
         $this->assertCount(1, $ids);
 

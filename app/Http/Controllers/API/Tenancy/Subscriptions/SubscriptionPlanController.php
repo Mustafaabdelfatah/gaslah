@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\Tenancy\Subscriptions;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Global\Other\PageRequest;
 use App\Http\Requests\Subscriptions\SubscriptionPlanRequest;
+use App\Http\Resources\Subscriptions\SubscriptionPlanResource;
 use App\Models\SubscriptionPlan;
 use Illuminate\Http\JsonResponse;
 
@@ -22,7 +23,7 @@ class SubscriptionPlanController extends TenantController
             ->when($request->filled('type'), fn ($q) => $q->where('type', $request->input('type')))
             ->orderBy('price');
 
-        return successResponse(wrapPaginate($query));
+        return successResponse(wrapPaginate($query, SubscriptionPlanResource::class));
     }
 
     public function store(SubscriptionPlanRequest $request): JsonResponse
@@ -35,7 +36,7 @@ class SubscriptionPlanController extends TenantController
             'organization_id' => $this->organizationId(),
         ]);
 
-        return successResponse($plan, __('api.created_success'), 201);
+        return successResponse(new SubscriptionPlanResource($plan), __('api.created_success'), 201);
     }
 
     public function update(SubscriptionPlanRequest $request, SubscriptionPlan $plan): JsonResponse
@@ -46,6 +47,6 @@ class SubscriptionPlanController extends TenantController
 
         $plan->update($request->validated());
 
-        return successResponse($plan->refresh(), __('api.updated_success'));
+        return successResponse(new SubscriptionPlanResource($plan->refresh()), __('api.updated_success'));
     }
 }

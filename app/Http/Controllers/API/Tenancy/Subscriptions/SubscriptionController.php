@@ -6,6 +6,7 @@ use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Global\Other\PageRequest;
 use App\Http\Requests\Subscriptions\PaySubscriptionRequest;
 use App\Http\Requests\Subscriptions\PurchaseSubscriptionRequest;
+use App\Http\Resources\Subscriptions\SubscriptionResource;
 use App\Models\Customer;
 use App\Models\Subscription;
 use App\Services\Subscriptions\SubscriptionService;
@@ -32,7 +33,7 @@ class SubscriptionController extends TenantController
             ->when($request->filled('customer_id'), fn ($q) => $q->where('customer_id', $request->input('customer_id')))
             ->orderByDesc('end_at');
 
-        return successResponse(wrapPaginate($query));
+        return successResponse(wrapPaginate($query, SubscriptionResource::class));
     }
 
     /**
@@ -46,7 +47,11 @@ class SubscriptionController extends TenantController
 
         $subscription = $this->subscriptions->purchase($request->plan(), $request->customer());
 
-        return successResponse($subscription->load('customer:id,name,phone', 'plan:id,name,cycle,type'), __('api.created_success'), 201);
+        return successResponse(
+            new SubscriptionResource($subscription->load('customer:id,name,phone', 'plan')),
+            __('api.created_success'),
+            201,
+        );
     }
 
     /**

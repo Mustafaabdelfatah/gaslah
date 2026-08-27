@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\API\Tenancy\Messaging;
 
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Global\Other\PageRequest;
 use App\Http\Requests\Messaging\OrgAnnouncementRequest;
+use App\Http\Resources\Messaging\OrgAnnouncementResource;
 use App\Models\OrgAnnouncement;
 use Illuminate\Http\JsonResponse;
 
@@ -13,13 +15,13 @@ use Illuminate\Http\JsonResponse;
  */
 class OrgAnnouncementController extends TenantController
 {
-    public function index(): JsonResponse
+    public function index(PageRequest $request): JsonResponse
     {
         $this->staff();
 
-        return successResponse(
-            OrgAnnouncement::query()->forOrganization($this->organizationId())->latest('id')->limit(100)->get()
-        );
+        $query = OrgAnnouncement::query()->forOrganization($this->organizationId())->latest('id');
+
+        return successResponse(wrapPaginate($query, OrgAnnouncementResource::class));
     }
 
     public function store(OrgAnnouncementRequest $request): JsonResponse
@@ -31,7 +33,7 @@ class OrgAnnouncementController extends TenantController
             'organization_id' => $this->organizationId(),
         ]);
 
-        return successResponse($announcement, __('api.created_success'), 201);
+        return successResponse(new OrgAnnouncementResource($announcement), __('api.created_success'), 201);
     }
 
     public function update(OrgAnnouncementRequest $request, OrgAnnouncement $announcement): JsonResponse
@@ -41,7 +43,7 @@ class OrgAnnouncementController extends TenantController
 
         $announcement->update($request->validated());
 
-        return successResponse($announcement->refresh(), __('api.updated_success'));
+        return successResponse(new OrgAnnouncementResource($announcement->refresh()), __('api.updated_success'));
     }
 
     public function destroy(OrgAnnouncement $announcement): JsonResponse

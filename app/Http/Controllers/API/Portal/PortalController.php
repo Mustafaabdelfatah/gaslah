@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\API\Portal;
 
+use App\Http\Requests\Global\Other\PageRequest;
 use App\Http\Requests\Portal\StoreCustomerAddressRequest;
+use App\Http\Resources\Portal\PortalOrderResource;
 use App\Models\CustomerAddress;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -33,27 +35,13 @@ class PortalController extends PortalBaseController
         ]);
     }
 
-    public function orders(): JsonResponse
+    public function orders(PageRequest $request): JsonResponse
     {
-        $orders = Order::query()
+        $query = Order::query()
             ->where('customer_id', $this->customer()->getKey())
-            ->latest('id')
-            ->limit(self::MAX_ORDERS)
-            ->get();
+            ->latest('id');
 
-        $data = $orders->map(fn (Order $order) => [
-            'id' => $order->getKey(),
-            'order_no' => $order->order_no,
-            'status' => $order->status->value,
-            'payment_status' => $order->payment_status->value,
-            'grand_total' => round((float) $order->grand_total, 2),
-            'paid_total' => round((float) $order->paid_total, 2),
-            'remaining' => $order->remaining(),
-            'created_at' => $order->created_at,
-            'due_at' => $order->due_at,
-        ]);
-
-        return successResponse($data);
+        return successResponse(wrapPaginate($query, PortalOrderResource::class));
     }
 
     public function order(int $id): JsonResponse

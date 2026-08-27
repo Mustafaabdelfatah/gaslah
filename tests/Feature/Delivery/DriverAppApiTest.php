@@ -92,7 +92,7 @@ class DriverAppApiTest extends TestCase
         $other = Driver::factory()->create(['organization_id' => $this->organization->getKey(), 'branch_id' => $this->branch->getKey()]);
         DeliveryRequest::factory()->create(['organization_id' => $this->organization->getKey(), 'branch_id' => $this->branch->getKey(), 'customer_id' => $this->customer->getKey(), 'driver_id' => $other->getKey()]);
 
-        $ids = collect($this->getJson('/api/driver/requests')->assertOk()->json('data'))->pluck('id');
+        $ids = collect($this->getJson('/api/driver/requests')->assertOk()->json('data.data'))->pluck('id');
         $this->assertTrue($ids->contains($mine->getKey()));
         $this->assertCount(1, $ids);
     }
