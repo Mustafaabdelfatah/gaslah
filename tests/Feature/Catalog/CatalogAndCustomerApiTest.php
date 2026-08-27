@@ -90,8 +90,46 @@ class CatalogAndCustomerApiTest extends TestCase
 
         $this->postJson('/api/customers', ['name' => 'Sara', 'phone' => '0501112222'])->assertCreated();
 
-        // The same phone in the same organization is refused.
-        $this->postJson('/api/customers', ['name' => 'Other', 'phone' => '0501112222'])->assertStatus(422);
+        // The same phone in the same organization is refused — as a field error, so the
+        // client can show it beside the input.
+        $this->postJson('/api/customers', ['name' => 'Other', 'phone' => '0501112222'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('phone');
+    }
+
+    public function test_a_customer_keeps_their_own_phone_when_edited(): void
+    {
+        $this->actingAsManager();
+        $customer = Customer::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'phone' => '0509998888',
+        ]);
+
+        // The uniqueness rule must ignore the row being edited.
+        $this->putJson("/api/customers/{$customer->getKey()}", ['name' => 'Renamed', 'phone' => '0509998888'])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Renamed');
+    }
+
+    public function test_the_customer_listing_is_paginated_and_searchable(): void
+    {
+        $this->actingAsManager();
+        $sara = Customer::factory()->create(['organization_id' => $this->organization->getKey(), 'name' => 'Sara Ali', 'phone' => '0501110000']);
+        Customer::factory()->create(['organization_id' => $this->organization->getKey(), 'name' => 'Omar Nabil', 'phone' => '0502220000']);
+
+        $this->getJson('/api/customers')
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['data' => [['id', 'name', 'phone', 'wallet_balance']], 'total']])
+            ->assertJsonPath('data.total', 2);
+
+        $this->getJson('/api/customers?search=Sara')
+            ->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.id', $sara->getKey());
+
+        $this->getJson('/api/customers?search=0502220000')
+            ->assertOk()
+            ->assertJsonPath('data.total', 1);
     }
 
     public function test_the_same_phone_is_allowed_in_a_different_organization(): void

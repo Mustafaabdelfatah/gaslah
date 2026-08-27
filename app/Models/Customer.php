@@ -81,4 +81,9 @@ class Customer extends BaseModel implements Authenticatable
     {
         return $this->hasMany(WalletTransaction::class);
     }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
 }

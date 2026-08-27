@@ -2,18 +2,20 @@
 
 namespace App\Http\Controllers\API\Tenancy\Catalog;
 
-use App\Enum\Accounting\SystemAccountEnum;
 use App\Enum\Payments\WalletTransactionTypeEnum;
 use App\Enum\Tenancy\StaffPermissionEnum;
+use App\Filters\Catalog\CustomerFilter;
+use App\Filters\Global\OrderByFilter;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Catalog\CustomerRequest;
+use App\Http\Requests\Catalog\WalletTopupRequest;
 use App\Http\Requests\Global\Other\PageRequest;
+use App\Http\Resources\Catalog\CustomerResource;
 use App\Models\Customer;
 use App\Services\Payments\WalletService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Pipeline\Pipeline;
+use Symfony\Component\HttpFoundation\Response;
 
 class CustomerController extends TenantController
 {
@@ -26,31 +28,25 @@ class CustomerController extends TenantController
     {
         $this->requirePermission(StaffPermissionEnum::CustomersManage);
 
-        $query = Customer::query()
-            ->forOrganization($this->organizationId())
-            ->when($request->filled('type'), fn ($q) => $q->where('type', $request->input('type')))
-            ->when($request->filled('search'), function ($q) use ($request) {
-                $term = '%'.$request->input('search').'%';
-                $q->where(fn ($sub) => $sub->where('name', 'like', $term)->orWhere('phone', 'like', $term));
-            })
-            ->latest('updated_at');
+        $query = app(Pipeline::class)
+            ->send(Customer::query()->forOrganization($this->organizationId()))
+            ->through([CustomerFilter::class, OrderByFilter::class])
+            ->thenReturn();
 
-        return successResponse(wrapPaginate($query));
+        return successResponse(wrapPaginate($query, CustomerResource::class));
     }
 
     public function store(CustomerRequest $request): JsonResponse
     {
         $this->requirePermission(StaffPermissionEnum::CustomersManage);
-        $this->assertPhoneIsFree($request->input('phone'));
 
-        $customer = Customer::query()->create([
+        $customer = Customer::create([
             ...$request->validated(),
             'organization_id' => $this->organizationId(),
             'branch_id' => $this->writeBranchId(),
-            'type' => $request->input('type', 'regular'),
         ]);
 
-        return successResponse($customer, __('api.created_success'), 201);
+        return successResponse(new CustomerResource($customer), __('api.created_success'), Response::HTTP_CREATED);
     }
 
     public function show(Customer $customer): JsonResponse
@@ -58,18 +54,17 @@ class CustomerController extends TenantController
         $this->requirePermission(StaffPermissionEnum::CustomersManage);
         $this->assertOwned($customer);
 
-        return successResponse($customer);
+        return successResponse(new CustomerResource($customer));
     }
 
     public function update(CustomerRequest $request, Customer $customer): JsonResponse
     {
         $this->requirePermission(StaffPermissionEnum::CustomersManage);
         $this->assertOwned($customer);
-        $this->assertPhoneIsFree($request->input('phone'), $customer->getKey());
 
         $customer->update($request->validated());
 
-        return successResponse($customer->refresh(), __('api.updated_success'));
+        return successResponse(new CustomerResource($customer->refresh()), __('api.updated_success'));
     }
 
     public function destroy(Customer $customer): JsonResponse
@@ -77,11 +72,9 @@ class CustomerController extends TenantController
         $this->requirePermission(StaffPermissionEnum::CustomersManage);
         $this->assertOwned($customer);
 
-        // A customer with order history is never deleted (orders reference them, and
-        // the wallet holds their money). The orders relation lands in the POS module.
-        if ($this->hasOrders($customer)) {
-            abort(422, __('api.customer_has_orders'));
-        }
+        // A customer with order history is never deleted: orders reference them and the
+        // wallet holds their money.
+        abort_if($customer->orders()->exists(), Response::HTTP_UNPROCESSABLE_ENTITY, __('api.customer_has_orders'));
 
         $customer->delete();
 
@@ -89,30 +82,20 @@ class CustomerController extends TenantController
     }
 
     /**
-     * Top up a customer's wallet. The movement and its ledger entry go through the
-     * wallet service so the balance stays locked and the books stay in step.
+     * Top up a customer's wallet. The movement and its ledger entry go through the wallet
+     * service so the balance stays locked and the books stay in step.
      */
-    public function walletTopup(Request $request, Customer $customer): JsonResponse
+    public function walletTopup(WalletTopupRequest $request, Customer $customer): JsonResponse
     {
         $this->requirePermission(StaffPermissionEnum::CustomersManage);
         $this->assertOwned($customer);
 
-        $data = $request->validate([
-            'amount' => ['required', 'numeric', 'gt:0'],
-            'method' => ['nullable', 'in:cash,bank'],
-            'note' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $funding = ($data['method'] ?? 'cash') === 'bank'
-            ? SystemAccountEnum::Bank
-            : SystemAccountEnum::Cash;
-
         $result = $this->wallet->credit(
             $customer,
-            (float) $data['amount'],
+            $request->amount(),
             WalletTransactionTypeEnum::Topup,
-            $data['note'] ?? __('api.wallet_topup_memo', ['name' => $customer->name]),
-            fundingAccount: $funding,
+            $request->note() ?? __('api.wallet_topup_memo', ['name' => $customer->name]),
+            fundingAccount: $request->fundingAccount(),
         );
 
         return successResponse($result, __('api.updated_success'));
@@ -127,33 +110,5 @@ class CustomerController extends TenantController
             'balance' => $customer->wallet_balance,
             'transactions' => $this->wallet->history($customer),
         ]);
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Helper Methods
-    |--------------------------------------------------------------------------
-    */
-
-    private function assertPhoneIsFree(?string $phone, ?int $ignoreId = null): void
-    {
-        if ($phone === null) {
-            return;
-        }
-
-        $exists = Customer::query()
-            ->forOrganization($this->organizationId())
-            ->where('phone', $phone)
-            ->when($ignoreId, fn ($q) => $q->whereKeyNot($ignoreId))
-            ->exists();
-
-        abort_if($exists, 422, __('api.phone_already_used'));
-    }
-
-    private function hasOrders(Customer $customer): bool
-    {
-        // The orders table arrives with the POS module; until then no customer has any.
-        return Schema::hasTable('orders')
-            && DB::table('orders')->where('customer_id', $customer->getKey())->exists();
     }
 }

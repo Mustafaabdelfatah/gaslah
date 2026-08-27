@@ -7,11 +7,12 @@ use App\Enum\Catalog\ServiceTypeEnum;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\ServiceCategory;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Catalog write operations.
+ * Catalog reads and write operations.
  *
  * A product and its price cells are created together in one transaction, and a
  * product rename fans out to keep every cell's name in step. Nothing is ever deleted
@@ -19,6 +20,49 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class CatalogService
 {
+    /**
+     * The sellable catalogue tree: active categories holding active products that have at
+     * least one active price cell.
+     *
+     * A product with no priced cell cannot be sold, and a category left with no such
+     * product has nothing to show, so both are dropped here rather than leaving every
+     * caller to remember the rule.
+     *
+     * @return Collection<int, ServiceCategory>
+     */
+    public function sellableTree(int $organizationId): Collection
+    {
+        return ServiceCategory::query()
+            ->forOrganization($organizationId)
+            ->active()
+            ->with(['products' => fn ($products) => $products
+                ->active()
+                ->orderBy('sort_order')
+                ->with(['services' => fn ($services) => $services->active()])])
+            ->orderBy('sort_order')
+            ->get()
+            ->each(fn (ServiceCategory $category) => $category->setRelation(
+                'products',
+                $category->products->filter(fn (Product $product) => $product->services->isNotEmpty())->values(),
+            ))
+            ->filter(fn (ServiceCategory $category) => $category->products->isNotEmpty())
+            ->values();
+    }
+
+    /**
+     * Create a category, appended to the end of the tenant's display order.
+     *
+     * @param  array{name: string, name_en?: string|null, icon?: string|null}  $data
+     */
+    public function createCategory(int $organizationId, array $data): ServiceCategory
+    {
+        return ServiceCategory::query()->create([
+            ...$data,
+            'organization_id' => $organizationId,
+            'sort_order' => $this->nextSortOrder(ServiceCategory::class, $organizationId),
+        ]);
+    }
+
     /**
      * Create a product with one price cell per requested service type.
      *
