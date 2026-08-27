@@ -54,7 +54,7 @@ class InventoryController extends TenantController
     {
         $this->requireManager();
         $this->requireFeature(self::FEATURE);
-        $this->assertOwned($item);
+        $this->assertInReadScope($item);
 
         $data = $this->validated($request, updating: true);
 
@@ -143,10 +143,5 @@ class InventoryController extends TenantController
     {
         $exists = Unit::query()->forOrganization($this->organizationId())->whereKey($unitId)->exists();
         abort_unless($exists, 422, __('api.inventory_unit_not_in_org'));
-    }
-
-    private function assertOwned(InventoryItem $item): void
-    {
-        abort_unless(in_array($item->branch_id, $this->readBranchIds(), true), 404, __('api.record_not_found'));
     }
 }

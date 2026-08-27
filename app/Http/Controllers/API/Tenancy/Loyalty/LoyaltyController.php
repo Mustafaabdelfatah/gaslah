@@ -123,9 +123,4 @@ class LoyaltyController extends TenantController
 
         return $program;
     }
-
-    private function assertOwned(Customer $customer): void
-    {
-        abort_unless($customer->organization_id === $this->organizationId(), 404, __('api.record_not_found'));
-    }
 }

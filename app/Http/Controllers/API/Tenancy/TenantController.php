@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Tenancy\EntitlementService;
 use App\Services\Tenancy\StaffPermissionService;
 use App\Services\Tenancy\TenantContext;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Base for every staff-facing controller.
@@ -122,5 +123,40 @@ abstract class TenantController extends BaseController
     protected function requireFeature(string $key): void
     {
         $this->entitlements->requireFeature($this->organization(), $key);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Scope guards
+    |--------------------------------------------------------------------------
+    |
+    | Route-model binding resolves a record by id alone, so anything reached that way
+    | must still be proven to sit inside the caller's tenant and branch scope. Both
+    | guards answer 404 rather than 403: a record outside the caller's scope should not
+    | be distinguishable from one that does not exist.
+    */
+
+    /**
+     * Require a record to belong to the caller's organization.
+     */
+    protected function assertOwned(?Model $record): void
+    {
+        abort_if(
+            $record === null || (int) $record->getAttribute('organization_id') !== $this->organizationId(),
+            404,
+            __('api.record_not_found'),
+        );
+    }
+
+    /**
+     * Require a branch-scoped record to sit in the caller's readable branches.
+     */
+    protected function assertInReadScope(?Model $record): void
+    {
+        abort_if(
+            $record === null || ! in_array((int) $record->getAttribute('branch_id'), $this->readBranchIds(), true),
+            404,
+            __('api.record_not_found'),
+        );
     }
 }

@@ -92,10 +92,6 @@ class JournalController extends TenantController
     | Helper Methods
     |--------------------------------------------------------------------------
     */
-    private function assertOwned(JournalEntry $entry): void
-    {
-        abort_unless($entry->organization_id === $this->organizationId(), 404, __('api.record_not_found'));
-    }
 
     /**
      * @param  array<int, int>  $accountIds

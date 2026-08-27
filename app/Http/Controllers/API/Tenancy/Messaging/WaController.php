@@ -183,9 +183,4 @@ class WaController extends TenantController
             'is_active' => ['nullable', 'boolean'],
         ]);
     }
-
-    private function assertOwned(WaTemplate $template): void
-    {
-        abort_unless($template->organization_id === $this->organizationId(), 404, __('api.record_not_found'));
-    }
 }

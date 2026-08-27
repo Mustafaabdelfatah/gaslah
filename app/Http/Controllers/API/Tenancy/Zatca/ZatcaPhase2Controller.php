@@ -22,7 +22,7 @@ class ZatcaPhase2Controller extends TenantController
     public function store(Order $order): JsonResponse
     {
         $this->requirePermission(StaffPermissionEnum::OrdersManage);
-        $this->assertOwned($order);
+        $this->assertInReadScope($order);
 
         $invoice = $this->invoices->generate($order, $this->organization());
 
@@ -34,7 +34,7 @@ class ZatcaPhase2Controller extends TenantController
     {
         // Reading the stored invoice is open to any staff of the tenant (no orders.manage).
         $this->staff();
-        $this->assertOwned($order);
+        $this->assertInReadScope($order);
 
         $invoice = ZatcaInvoice::query()
             ->forOrganization($this->organizationId())
@@ -44,10 +44,5 @@ class ZatcaPhase2Controller extends TenantController
         abort_if($invoice === null, 404, __('api.record_not_found'));
 
         return successResponse($invoice);
-    }
-
-    private function assertOwned(Order $order): void
-    {
-        abort_unless(in_array($order->branch_id, $this->readBranchIds(), true), 404, __('api.record_not_found'));
     }
 }

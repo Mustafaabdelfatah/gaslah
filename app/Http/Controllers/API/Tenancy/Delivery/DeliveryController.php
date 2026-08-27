@@ -193,7 +193,7 @@ class DeliveryController extends TenantController
     {
         $this->staff();
         $this->requireFeature(self::FEATURE);
-        $this->assertOwnedRequest($delivery);
+        $this->assertInReadScope($delivery);
 
         $data = $delivery->load('customer', 'driver', 'order', 'zone', 'history')->toArray();
         $data['pickup_photo_signed_url'] = $this->signedPhotoUrl($delivery->pickup_photo_url);
@@ -233,7 +233,7 @@ class DeliveryController extends TenantController
     {
         $this->staff();
         $this->requireFeature(self::FEATURE);
-        $this->assertOwnedRequest($delivery);
+        $this->assertInReadScope($delivery);
 
         $data = $request->validate([
             'driver_id' => ['nullable', 'integer'],
@@ -270,7 +270,7 @@ class DeliveryController extends TenantController
     {
         $this->staff();
         $this->requireFeature(self::FEATURE);
-        $this->assertOwnedRequest($delivery);
+        $this->assertInReadScope($delivery);
 
         $data = $request->validate([
             'action' => ['required', 'in:arrive,require_invoice_approval'],
@@ -294,7 +294,7 @@ class DeliveryController extends TenantController
     {
         $this->staff();
         $this->requireFeature(self::FEATURE);
-        $this->assertOwnedRequest($delivery);
+        $this->assertInReadScope($delivery);
 
         $branch = Branch::query()->where('organization_id', $this->organizationId())->findOrFail($delivery->branch_id);
 
@@ -323,11 +323,6 @@ class DeliveryController extends TenantController
     | Helper Methods
     |--------------------------------------------------------------------------
     */
-    private function assertOwnedRequest(DeliveryRequest $delivery): void
-    {
-        abort_unless(in_array($delivery->branch_id, $this->readBranchIds(), true), 404, __('api.record_not_found'));
-    }
-
     /**
      * A 12-hour signed URL for a stored proof photo (the signature is the authorization).
      */

@@ -88,9 +88,4 @@ class SubscriptionController extends TenantController
 
         return successResponse($result, __('api.subscription_collected'));
     }
-
-    private function assertOwned(Subscription $subscription): void
-    {
-        abort_unless($subscription->organization_id === $this->organizationId(), 404, __('api.record_not_found'));
-    }
 }

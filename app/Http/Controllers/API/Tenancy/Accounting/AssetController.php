@@ -72,9 +72,4 @@ class AssetController extends TenantController
 
         return successResponse(msg: __('api.deleted_success'));
     }
-
-    private function assertOwned(FixedAsset $asset): void
-    {
-        abort_unless($asset->organization_id === $this->organizationId(), 404, __('api.record_not_found'));
-    }
 }

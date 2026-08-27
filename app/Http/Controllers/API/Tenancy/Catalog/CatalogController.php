@@ -169,11 +169,6 @@ class CatalogController extends TenantController
         ];
     }
 
-    private function assertOwned(Product $product): void
-    {
-        abort_unless($product->organization_id === $this->organizationId(), 404, __('api.record_not_found'));
-    }
-
     private function assertCodeIsFree(?string $code, int $ignoreId): void
     {
         if ($code === null || $code === '') {

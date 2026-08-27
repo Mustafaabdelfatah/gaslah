@@ -68,9 +68,4 @@ class OrgAnnouncementController extends TenantController
             'is_active' => ['nullable', 'boolean'],
         ]);
     }
-
-    private function assertOwned(OrgAnnouncement $announcement): void
-    {
-        abort_unless($announcement->organization_id === $this->organizationId(), 404, __('api.record_not_found'));
-    }
 }
