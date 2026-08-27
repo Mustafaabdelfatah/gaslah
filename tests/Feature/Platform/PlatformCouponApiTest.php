@@ -111,6 +111,40 @@ class PlatformCouponApiTest extends TestCase
             ->assertJsonPath('data.found', false);
     }
 
+    public function test_the_listing_is_paginated_and_filterable_by_redeemability(): void
+    {
+        PlatformCoupon::factory()->create(['code' => 'LIVE']);
+        PlatformCoupon::factory()->create(['code' => 'SPENT', 'max_redemptions' => 1, 'redemptions' => 1]);
+        PlatformCoupon::factory()->create(['code' => 'STALE', 'expires_at' => now()->subDay()]);
+
+        $this->getJson('/api/admin/coupons?is_redeemable=1')
+            ->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.code', 'LIVE')
+            ->assertJsonPath('data.data.0.is_redeemable', true);
+
+        $this->getJson('/api/admin/coupons?search=spent')
+            ->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.remaining', 0);
+    }
+
+    public function test_a_percent_coupon_cannot_discount_more_than_the_whole_price(): void
+    {
+        $this->postJson('/api/admin/coupons', ['code' => 'TOOMUCH', 'type' => 'percent', 'value' => 150])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('value');
+    }
+
+    public function test_a_duplicate_code_is_rejected_regardless_of_case(): void
+    {
+        PlatformCoupon::factory()->create(['code' => 'SAVE20']);
+
+        $this->postJson('/api/admin/coupons', ['code' => 'save20', 'type' => 'percent', 'value' => 5])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('code');
+    }
+
     private function owner(): User
     {
         $user = $this->createUser();

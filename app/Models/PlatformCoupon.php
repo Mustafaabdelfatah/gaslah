@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use App\Enum\Platform\PlatformCouponTypeEnum;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * A discount coupon for tenant subscriptions. Redemption never exceeds the cap: the
@@ -35,6 +37,26 @@ class PlatformCoupon extends BaseModel
         'expires_at' => 'datetime',
         'is_active' => 'boolean',
     ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Scopes methods
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Coupons that could still be used: active, unexpired, and under their cap.
+     *
+     * The SQL mirrors {@see isRedeemable} minus its plan check, so a listing filtered on
+     * "redeemable" agrees with what redemption will actually allow.
+     */
+    public function scopeRedeemable(Builder $query): Builder
+    {
+        return $query
+            ->where('is_active', true)
+            ->where(fn (Builder $q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', Carbon::now()))
+            ->where(fn (Builder $q) => $q->whereNull('max_redemptions')->orWhereColumn('redemptions', '<', 'max_redemptions'));
+    }
 
     /**
      * The coupon's effect on a price.

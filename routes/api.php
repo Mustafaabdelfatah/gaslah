@@ -532,9 +532,11 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         Route::patch('{organization}/entitlements', [AdminTenantController::class, 'updateEntitlements']);
     });
 
-    Route::put('tenants/{organization}/subscription', [AdminSubscriptionController::class, 'update']);
-    Route::post('tenants/{organization}/start-trial', [AdminSubscriptionController::class, 'startTrial']);
-    Route::post('tenants/{organization}/extend', [AdminSubscriptionController::class, 'extend']);
+    Route::prefix('tenants/{organization}')->middleware('platform.permission:manage_subscriptions')->group(function () {
+        Route::put('subscription', [AdminSubscriptionController::class, 'update']);
+        Route::post('start-trial', [AdminSubscriptionController::class, 'startTrial']);
+        Route::post('extend', [AdminSubscriptionController::class, 'extend']);
+    });
 
     // Subscription billing — two-step ZATCA invoicing.
     Route::get('invoices', [AdminInvoiceController::class, 'index']);
@@ -549,11 +551,12 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::post('dunning/run', [AdminDunningController::class, 'run']);
 
     // Subscription coupons.
-    Route::post('coupons/validate', [AdminCouponController::class, 'validateCode']);
-    Route::get('coupons', [AdminCouponController::class, 'index']);
-    Route::post('coupons', [AdminCouponController::class, 'store']);
-    Route::put('coupons/{coupon}', [AdminCouponController::class, 'update']);
-    Route::delete('coupons/{coupon}', [AdminCouponController::class, 'destroy']);
+    Route::prefix('coupons')->middleware('platform.permission:manage_subscriptions')->group(function () {
+        Route::post('validate', [AdminCouponController::class, 'validateCode']);
+        Route::delete('delete', [AdminCouponController::class, 'destroy']);
+        Route::put('toggle-active', [AdminCouponController::class, 'toggleActive']);
+        Route::apiResource('/', AdminCouponController::class)->parameters(['' => 'coupon'])->except(['destroy']);
+    });
 });
 
 Route::middleware('auth:sanctum')->prefix('admin/payouts')->group(function () {

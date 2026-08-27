@@ -5,11 +5,16 @@ namespace App\Services\Platform;
 use App\Enum\Platform\PlatformCycleEnum;
 use App\Enum\Platform\PlatformEventTypeEnum;
 use App\Enum\Platform\PlatformSubscriptionStatusEnum;
+use App\Http\Requests\Platform\SetSubscriptionRequest;
 use App\Models\Organization;
+use App\Models\PlatformCoupon;
 use App\Models\PlatformEvent;
 use App\Models\PlatformPlan;
 use App\Models\PlatformSubscription;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Manages an organization's platform subscription (one row per org) and records the
@@ -18,6 +23,60 @@ use Illuminate\Support\Carbon;
 class PlatformSubscriptionService
 {
     private const DEFAULT_TRIAL_DAYS = 14;
+
+    /**
+     * Apply a subscription change from the console, redeeming a coupon when one was given.
+     *
+     * A coupon adjusts the price and can append free months. Redemption and the write are
+     * one transaction: either the coupon is consumed and the subscription set, or neither
+     * happens — a coupon is never burned against a change that failed.
+     */
+    public function apply(Organization $organization, SetSubscriptionRequest $request): PlatformSubscription
+    {
+        $plan = $request->plan();
+        $cycle = $request->cycle();
+        $couponCode = $request->couponCode();
+
+        if ($couponCode === null) {
+            return $this->set(
+                $organization,
+                $plan,
+                $request->status(),
+                $cycle,
+                $request->currentPeriodEnd(),
+                $request->cancelAtPeriodEnd(),
+                $request->customPrice(),
+            );
+        }
+
+        $coupon = PlatformCoupon::query()->where('code', Str::upper($couponCode))->first();
+
+        abort_if(
+            $coupon === null || ! $coupon->isRedeemable($plan->getKey()),
+            Response::HTTP_UNPROCESSABLE_ENTITY,
+            __('api.coupon_not_redeemable'),
+        );
+
+        $effect = $coupon->effect($request->customPrice() ?? $this->planPrice($plan, $cycle));
+
+        $periodEnd = ($request->currentPeriodEnd() ?? Carbon::now()->addMonths($cycle->months()))
+            ->copy()
+            ->addMonths($effect['extra_months']);
+
+        return DB::transaction(function () use ($coupon, $organization, $plan, $request, $cycle, $periodEnd, $effect) {
+            abort_unless($coupon->redeem(), Response::HTTP_UNPROCESSABLE_ENTITY, __('api.coupon_not_redeemable'));
+
+            return $this->set(
+                $organization,
+                $plan,
+                $request->status(),
+                $cycle,
+                $periodEnd,
+                $request->cancelAtPeriodEnd(),
+                $effect['price'],
+            );
+        });
+    }
 
     /**
      * Set (create or update) an organization's subscription.

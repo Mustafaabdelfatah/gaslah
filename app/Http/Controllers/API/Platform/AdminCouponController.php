@@ -2,92 +2,78 @@
 
 namespace App\Http\Controllers\API\Platform;
 
-use App\Enum\Platform\PlatformCouponTypeEnum;
-use App\Enum\Tenancy\PlatformPermissionEnum;
+use App\Filters\Global\ActiveFilter;
+use App\Filters\Global\OrderByFilter;
+use App\Filters\Platform\CouponFilter;
+use App\Http\Controllers\API\BaseController;
+use App\Http\Requests\Global\Other\PageRequest;
+use App\Http\Requests\Platform\PlatformCouponRequest;
+use App\Http\Requests\Platform\ValidateCouponRequest;
+use App\Http\Resources\Platform\PlatformCouponResource;
 use App\Models\PlatformCoupon;
+use App\Trait\Global\HasDeleteMethods;
+use App\Trait\Global\HasToggleActiveMethods;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
+use Illuminate\Pipeline\Pipeline;
 
 /**
- * CRUD and validation for subscription coupons (manage_subscriptions). Coupons are
- * redeemed as part of setting a subscription; this surface only defines and previews them.
+ * Subscription coupons. Redemption itself happens as part of setting a subscription
+ * (see PlatformSubscriptionService::apply); this surface only defines and previews them.
  */
-class AdminCouponController extends PlatformBaseController
+class AdminCouponController extends BaseController
 {
-    public function index(): JsonResponse
-    {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManageSubscriptions);
+    use HasDeleteMethods, HasToggleActiveMethods;
 
-        return successResponse(
-            PlatformCoupon::query()->with('plan:id,name')->latest('id')->paginate(30),
-        );
+    public function __construct()
+    {
+        parent::__construct();
+        $this->model = PlatformCoupon::class;
+
+        // Platform admins are authorised by the route middleware, not by a per-model
+        // policy or a spatie permission.
+        $this->enableDeletePolicy(false)->enableTogglePolicy(false);
     }
 
-    public function store(Request $request): JsonResponse
+    public function index(PageRequest $request): JsonResponse
     {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManageSubscriptions);
+        $query = app(Pipeline::class)
+            ->send(PlatformCoupon::query()->with('plan:id,name'))
+            ->through([CouponFilter::class, ActiveFilter::class, OrderByFilter::class])
+            ->thenReturn();
 
-        $data = $this->validated($request);
-
-        return successResponse(PlatformCoupon::query()->create($data), __('api.created_success'), 201);
+        return successResponse(wrapPaginate($query, PlatformCouponResource::class));
     }
 
-    public function update(Request $request, PlatformCoupon $coupon): JsonResponse
+    public function store(PlatformCouponRequest $request): JsonResponse
     {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManageSubscriptions);
+        $coupon = PlatformCoupon::create($request->validated());
 
-        $coupon->update($this->validated($request, $coupon));
-
-        return successResponse($coupon->fresh(), __('api.updated_success'));
+        return successResponse(new PlatformCouponResource($coupon->refresh()), __('api.created_success'), 201);
     }
 
-    public function destroy(PlatformCoupon $coupon): JsonResponse
+    public function show(PlatformCoupon $coupon): JsonResponse
     {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManageSubscriptions);
+        return successResponse(new PlatformCouponResource($coupon->load('plan:id,name')));
+    }
 
-        $coupon->delete();
+    public function update(PlatformCouponRequest $request, PlatformCoupon $coupon): JsonResponse
+    {
+        $coupon->update($request->validated());
 
-        return successResponse(null, __('api.deleted_success'));
+        return successResponse(new PlatformCouponResource($coupon->refresh()), __('api.updated_success'));
     }
 
     /**
-     * Preview whether a coupon can be redeemed (optionally for a given plan).
+     * Preview a code before it is applied to a subscription.
      */
-    public function validateCode(Request $request): JsonResponse
+    public function validateCode(ValidateCouponRequest $request): JsonResponse
     {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManageSubscriptions);
-
-        $data = $request->validate([
-            'code' => ['required', 'string', 'max:40'],
-            'plan_id' => ['nullable', 'integer'],
-        ]);
-
-        $coupon = PlatformCoupon::query()->where('code', strtoupper($data['code']))->first();
-        $planId = $data['plan_id'] ?? null;
+        $coupon = $request->coupon();
 
         return successResponse([
             'found' => $coupon !== null,
-            'redeemable' => $coupon !== null && $coupon->isRedeemable($planId),
-            'coupon' => $coupon,
-        ]);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function validated(Request $request, ?PlatformCoupon $coupon = null): array
-    {
-        $codeRule = 'unique:platform_coupons,code'.($coupon !== null ? ','.$coupon->getKey() : '');
-
-        return $request->validate([
-            'code' => ['required', 'string', 'min:2', 'max:40', 'regex:/^[A-Za-z0-9_-]+$/', $codeRule],
-            'type' => ['required', 'in:'.implode(',', PlatformCouponTypeEnum::values())],
-            'value' => ['required', 'numeric', 'min:0'],
-            'max_redemptions' => ['nullable', 'integer', 'min:1'],
-            'applies_to_plan_id' => ['nullable', 'integer', 'exists:platform_plans,id'],
-            'expires_at' => ['nullable', 'date'],
-            'is_active' => ['nullable', 'boolean'],
-            'note' => ['nullable', 'string', 'max:255'],
+            'redeemable' => $coupon?->isRedeemable($request->planId()) ?? false,
+            'coupon' => $coupon === null ? null : new PlatformCouponResource($coupon),
         ]);
     }
 }
