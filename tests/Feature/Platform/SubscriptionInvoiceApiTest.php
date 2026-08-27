@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Platform;
 
+use App\Enum\Tenancy\PlatformPermissionEnum;
 use App\Enum\Tenancy\PlatformRoleEnum;
 use App\Models\JournalEntry;
 use App\Models\JournalLine;
@@ -138,6 +139,58 @@ class SubscriptionInvoiceApiTest extends TestCase
 
         $this->deleteJson("/api/admin/invoices/{$invoiceId}")->assertOk();
         $this->assertNull(SubscriptionInvoice::query()->find($invoiceId));
+    }
+
+    public function test_the_listing_is_paginated_filterable_and_totals_only_issued(): void
+    {
+        $plan = PlatformPlan::factory()->create(['monthly_price' => 115]);
+        Sanctum::actingAs($this->owner());
+
+        $draft = fn () => $this->postJson("/api/admin/tenants/{$this->organization->getKey()}/invoices", [
+            'plan_id' => $plan->getKey(), 'payment_method' => 'cash',
+        ])->json('data.id');
+
+        $confirmed = $draft();
+        $draft();
+        $this->postJson("/api/admin/invoices/{$confirmed}/confirm")->assertOk();
+
+        // Both invoices are listed, but only the issued one counts as revenue.
+        $this->getJson('/api/admin/invoices')
+            ->assertOk()
+            ->assertJsonPath('data.data.total', 2)
+            ->assertJsonPath('data.totals.issued_count', 1)
+            ->assertJsonPath('data.totals.revenue', 100)
+            ->assertJsonPath('data.totals.vat', 15);
+
+        $this->getJson('/api/admin/invoices?status=draft')
+            ->assertOk()
+            ->assertJsonPath('data.data.total', 1)
+            ->assertJsonPath('data.data.data.0.status', 'draft');
+    }
+
+    public function test_confirming_needs_the_accounting_permission(): void
+    {
+        $plan = PlatformPlan::factory()->create();
+        Sanctum::actingAs($this->owner());
+
+        $invoiceId = $this->postJson("/api/admin/tenants/{$this->organization->getKey()}/invoices", [
+            'plan_id' => $plan->getKey(), 'payment_method' => 'cash',
+        ])->json('data.id');
+
+        // A finance-only admin may read invoices but must not recognise revenue.
+        Sanctum::actingAs($this->adminWith(PlatformPermissionEnum::ViewFinance));
+
+        $this->getJson('/api/admin/invoices')->assertOk();
+        $this->postJson("/api/admin/invoices/{$invoiceId}/confirm")->assertStatus(403);
+    }
+
+    private function adminWith(PlatformPermissionEnum $permission): User
+    {
+        $user = $this->createUser();
+        $user->forceFill(['is_platform_owner' => true, 'platform_role' => PlatformRoleEnum::Viewer->value])->save();
+        $user->platformPermissions()->create(['permission' => $permission->value]);
+
+        return $user;
     }
 
     private function owner(): User

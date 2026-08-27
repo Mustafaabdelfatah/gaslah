@@ -538,17 +538,24 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         Route::post('extend', [AdminSubscriptionController::class, 'extend']);
     });
 
-    // Subscription billing — two-step ZATCA invoicing.
-    Route::get('invoices', [AdminInvoiceController::class, 'index']);
-    Route::get('invoices/{invoice}', [AdminInvoiceController::class, 'show']);
-    Route::post('tenants/{organization}/invoices', [AdminInvoiceController::class, 'store']);
-    Route::post('invoices/{invoice}/confirm', [AdminInvoiceController::class, 'confirm']);
-    Route::delete('invoices/{invoice}', [AdminInvoiceController::class, 'destroy']);
+    // Subscription billing — two-step ZATCA invoicing. Reading, drafting and recognising
+    // revenue are three different permissions.
+    Route::prefix('invoices')->group(function () {
+        Route::get('/', [AdminInvoiceController::class, 'index'])->middleware('platform.permission:view_finance');
+        Route::get('{invoice}', [AdminInvoiceController::class, 'show'])->middleware('platform.permission:view_finance');
+        Route::post('{invoice}/confirm', [AdminInvoiceController::class, 'confirm'])->middleware('platform.permission:manage_accounting');
+        Route::delete('{invoice}', [AdminInvoiceController::class, 'destroy'])->middleware('platform.permission:manage_subscriptions');
+    });
+    Route::post('tenants/{organization}/invoices', [AdminInvoiceController::class, 'store'])
+        ->middleware('platform.permission:manage_subscriptions');
 
     // Dunning — reminder/renewal/suspension cycle.
-    Route::get('dunning', [AdminDunningController::class, 'index']);
-    Route::put('dunning', [AdminDunningController::class, 'update']);
-    Route::post('dunning/run', [AdminDunningController::class, 'run']);
+    Route::prefix('dunning')->middleware('platform.permission:manage_subscriptions')->group(function () {
+        Route::get('/', [AdminDunningController::class, 'index']);
+        Route::get('activity', [AdminDunningController::class, 'activity']);
+        Route::put('/', [AdminDunningController::class, 'update']);
+        Route::post('run', [AdminDunningController::class, 'run']);
+    });
 
     // Subscription coupons.
     Route::prefix('coupons')->middleware('platform.permission:manage_subscriptions')->group(function () {

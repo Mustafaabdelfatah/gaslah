@@ -5,6 +5,7 @@ namespace App\Services\Platform;
 use App\Enum\Platform\InvoicePaymentMethodEnum;
 use App\Enum\Platform\PlatformCycleEnum;
 use App\Enum\Platform\SubscriptionInvoiceStatusEnum;
+use App\Http\Requests\Platform\DraftInvoiceRequest;
 use App\Models\Organization;
 use App\Models\PlatformPlan;
 use App\Models\PlatformSubscription;
@@ -40,6 +41,39 @@ class SubscriptionInvoicer
         private readonly PlatformBooks $books,
         private readonly PlatformConfigStore $config,
     ) {}
+
+    /**
+     * Draft an invoice for a tenant from a console request, filling the gaps from the
+     * tenant's own subscription.
+     *
+     * Plan: the one asked for, else the subscribed plan. Cycle: likewise. Total: the
+     * manual amount, else — when no other plan was named — the price the tenant is
+     * actually paying, else the plan's list price for the cycle.
+     */
+    public function quoteForTenant(Organization $organization, DraftInvoiceRequest $request): SubscriptionInvoice
+    {
+        $subscription = $organization->platformSubscription()->with('plan')->first();
+
+        $plan = $request->plan() ?? $subscription?->plan;
+        abort_if($plan === null, Response::HTTP_UNPROCESSABLE_ENTITY, __('api.invoice_plan_required'));
+
+        $cycle = $request->cycle() ?? $subscription?->cycle ?? PlatformCycleEnum::Monthly;
+
+        $total = $request->amount();
+        if ($total === null && $subscription !== null && $request->plan() === null) {
+            $total = (float) $subscription->price;
+        }
+
+        return $this->quote(
+            $organization,
+            $plan,
+            $cycle,
+            $request->paymentMethod(),
+            $request->paymentMeta(),
+            $total,
+            $subscription,
+        );
+    }
 
     /**
      * Create a DRAFT invoice for a subscription period. No chain slot, no ledger entry.

@@ -3,18 +3,25 @@
 namespace App\Http\Controllers\API\Platform;
 
 use App\Enum\Platform\PlatformAuditActionEnum;
-use App\Enum\Tenancy\PlatformPermissionEnum;
+use App\Filters\Global\OrderByFilter;
+use App\Filters\Platform\OrganizationScopeFilter;
+use App\Http\Controllers\API\BaseController;
+use App\Http\Requests\Global\Other\PageRequest;
+use App\Http\Requests\Platform\DunningPolicyRequest;
+use App\Http\Resources\Platform\DunningLogResource;
 use App\Models\DunningLog;
+use App\Models\User;
 use App\Services\Platform\DunningService;
 use App\Services\Platform\PlatformAuditService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
+use Illuminate\Pipeline\Pipeline;
 
 /**
- * The dunning console (manage_subscriptions): view and edit the policy, and run a cycle
- * on demand. Every write is audited.
+ * The dunning console: read and edit the policy, run a cycle on demand, and read the
+ * trail of what the cycle did. Gated on manage_subscriptions at the routes; every write
+ * is audited.
  */
-class AdminDunningController extends PlatformBaseController
+class AdminDunningController extends BaseController
 {
     public function __construct(
         private readonly DunningService $dunning,
@@ -25,35 +32,25 @@ class AdminDunningController extends PlatformBaseController
 
     public function index(): JsonResponse
     {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManageSubscriptions);
-
-        return successResponse([
-            'policy' => $this->dunning->policy(),
-            'activity' => DunningLog::query()
-                ->with('organization:id,name')
-                ->latest('id')
-                ->limit(50)
-                ->get(),
-        ]);
+        return successResponse(['policy' => $this->dunning->policy()]);
     }
 
-    public function update(Request $request): JsonResponse
+    /**
+     * The dunning trail, newest first — optionally scoped to one tenant.
+     */
+    public function activity(PageRequest $request): JsonResponse
     {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManageSubscriptions);
+        $query = app(Pipeline::class)
+            ->send(DunningLog::query()->with('organization:id,name'))
+            ->through([OrganizationScopeFilter::class, OrderByFilter::class])
+            ->thenReturn();
 
-        $data = $request->validate([
-            'enabled' => ['required', 'boolean'],
-            'remind_days_before' => ['nullable', 'array'],
-            'remind_days_before.*' => ['integer', 'min:1', 'max:365'],
-            'remind_days_after' => ['nullable', 'array'],
-            'remind_days_after.*' => ['integer', 'min:1', 'max:365'],
-            'grace_days' => ['nullable', 'integer', 'min:0', 'max:365'],
-            'channels' => ['nullable', 'array'],
-            'channels.whatsapp' => ['nullable', 'boolean'],
-            'channels.email' => ['nullable', 'boolean'],
-        ]);
+        return successResponse(wrapPaginate($query, DunningLogResource::class));
+    }
 
-        $policy = $this->dunning->savePolicy($data);
+    public function update(DunningPolicyRequest $request): JsonResponse
+    {
+        $policy = $this->dunning->savePolicy($request->validated());
 
         $this->audit->log($this->admin(), PlatformAuditActionEnum::Dunning, null, ['action' => 'update_policy']);
 
@@ -62,12 +59,18 @@ class AdminDunningController extends PlatformBaseController
 
     public function run(): JsonResponse
     {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManageSubscriptions);
-
         $summary = $this->dunning->run();
 
         $this->audit->log($this->admin(), PlatformAuditActionEnum::Dunning, null, ['action' => 'run', ...$summary]);
 
         return successResponse($summary);
+    }
+
+    private function admin(): User
+    {
+        /** @var User $user */
+        $user = request()->user();
+
+        return $user;
     }
 }
