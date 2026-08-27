@@ -510,9 +510,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
 Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::get('stats', [PlatformStatsController::class, 'index']);
 
-    Route::get('plans', [AdminPlanController::class, 'index']);
-    Route::post('plans', [AdminPlanController::class, 'store']);
-    Route::put('plans/{plan}', [AdminPlanController::class, 'update']);
+    Route::prefix('plans')->group(function () {
+        Route::get('/', [AdminPlanController::class, 'index'])->middleware('platform.permission:manage_plans,view_finance');
+        Route::get('{plan}', [AdminPlanController::class, 'show'])->middleware('platform.permission:manage_plans,view_finance');
+        Route::post('/', [AdminPlanController::class, 'store'])->middleware('platform.permission:manage_plans');
+        Route::put('{plan}', [AdminPlanController::class, 'update'])->middleware('platform.permission:manage_plans');
+    });
 
     Route::get('activity', [AdminTenantController::class, 'activity']);
 

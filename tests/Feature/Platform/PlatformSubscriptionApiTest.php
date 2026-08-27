@@ -42,7 +42,8 @@ class PlatformSubscriptionApiTest extends TestCase
         $this->postJson('/api/admin/plans', ['name' => 'Pro', 'monthly_price' => 300, 'yearly_price' => 3000])
             ->assertCreated();
 
-        $this->getJson('/api/admin/plans')->assertOk()->assertJsonPath('data.0.name', 'Pro');
+        // Listings follow the starter's paginated envelope (wrapPaginate).
+        $this->getJson('/api/admin/plans')->assertOk()->assertJsonPath('data.data.0.name', 'Pro');
     }
 
     public function test_a_non_admin_cannot_manage_plans(): void
@@ -50,6 +51,53 @@ class PlatformSubscriptionApiTest extends TestCase
         Sanctum::actingAs(User::factory()->create());
 
         $this->getJson('/api/admin/plans')->assertStatus(403);
+    }
+
+    public function test_the_plan_listing_is_paginated_and_carries_its_commercials(): void
+    {
+        $plan = PlatformPlan::factory()->create(['name' => 'Pro', 'monthly_price' => 300, 'yearly_price' => 3600]);
+
+        // One monthly at 300 and one yearly at 3600 → 300 + 300 = 600 MRR.
+        $this->organization->platformSubscription()->create([
+            'plan_id' => $plan->getKey(), 'status' => 'active', 'cycle' => 'monthly',
+            'price' => 300, 'started_at' => now(), 'current_period_end' => now()->addMonth(),
+        ]);
+        [$other] = $this->createTenant();
+        $other->platformSubscription()->create([
+            'plan_id' => $plan->getKey(), 'status' => 'active', 'cycle' => 'yearly',
+            'price' => 3600, 'started_at' => now(), 'current_period_end' => now()->addYear(),
+        ]);
+
+        Sanctum::actingAs($this->owner());
+
+        $this->getJson('/api/admin/plans')
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['data', 'current_page', 'per_page', 'total']])
+            ->assertJsonPath('data.data.0.subscribers', 2)
+            ->assertJsonPath('data.data.0.active_subscribers', 2)
+            ->assertJsonPath('data.data.0.mrr', 600);
+    }
+
+    public function test_a_partial_plan_update_keeps_the_untouched_fields(): void
+    {
+        $plan = PlatformPlan::factory()->create(['name' => 'Pro', 'is_active' => true, 'feature_keys' => ['delivery']]);
+        Sanctum::actingAs($this->owner());
+
+        $this->putJson("/api/admin/plans/{$plan->getKey()}", ['name' => 'Pro Plus'])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Pro Plus')
+            ->assertJsonPath('data.is_active', true)
+            ->assertJsonPath('data.feature_keys', ['delivery']);
+    }
+
+    public function test_creating_a_plan_rejects_an_unknown_feature_key(): void
+    {
+        Sanctum::actingAs($this->owner());
+
+        $this->postJson('/api/admin/plans', [
+            'name' => 'Bad', 'monthly_price' => 10, 'yearly_price' => 100,
+            'feature_keys' => ['no_such_feature'],
+        ])->assertStatus(422)->assertJsonValidationErrors('feature_keys.0');
     }
 
     /*

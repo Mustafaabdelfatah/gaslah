@@ -7,6 +7,7 @@ use App\Exceptions\InvalidOtpException;
 use App\Exceptions\InvalidPasswordResetTokenException;
 use App\Exceptions\ModelAlreadyExistsException;
 use App\Http\Middleware\LanguageMiddleware;
+use App\Http\Middleware\PlatformPermissionMiddleware;
 use App\Services\Accounting\AccountingException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -26,6 +27,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->api(prepend: [LanguageMiddleware::class]);
+
+        $middleware->alias([
+            'platform.permission' => PlatformPermissionMiddleware::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->render(function (NotFoundHttpException $e, Request $request) {

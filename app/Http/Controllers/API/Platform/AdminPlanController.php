@@ -2,92 +2,52 @@
 
 namespace App\Http\Controllers\API\Platform;
 
-use App\Enum\Platform\PlatformSubscriptionStatusEnum;
-use App\Enum\Tenancy\PlatformPermissionEnum;
+use App\Filters\Global\ActiveFilter;
+use App\Filters\Global\NameFilter;
+use App\Filters\Global\OrderByFilter;
+use App\Http\Controllers\API\BaseController;
+use App\Http\Requests\Global\Other\PageRequest;
+use App\Http\Requests\Platform\PlatformPlanRequest;
+use App\Http\Resources\Platform\PlatformPlanResource;
 use App\Models\PlatformPlan;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
+use Illuminate\Pipeline\Pipeline;
 
 /**
- * Platform plan catalogue. Reading needs a live admin session; writing needs manage_plans.
- * Plans are retired (is_active=false), never hard-deleted.
+ * The platform plan catalogue.
+ *
+ * Reading is open to finance as well as plan managers; writing needs manage_plans (both
+ * gated on the routes). Plans are retired through is_active, never hard-deleted, so this
+ * controller exposes no destroy.
  */
-class AdminPlanController extends PlatformBaseController
+class AdminPlanController extends BaseController
 {
-    public function index(): JsonResponse
+    public function index(PageRequest $request): JsonResponse
     {
-        $this->requireAnyPlatformPermission([PlatformPermissionEnum::ManagePlans, PlatformPermissionEnum::ViewFinance]);
+        $query = app(Pipeline::class)
+            ->send(PlatformPlan::query()->withCommercials())
+            ->through([NameFilter::class, ActiveFilter::class, OrderByFilter::class])
+            ->thenReturn();
 
-        $plans = PlatformPlan::query()
-            ->withCount([
-                'subscriptions',
-                'subscriptions as active_count' => fn ($q) => $q->where('status', PlatformSubscriptionStatusEnum::Active->value),
-            ])
-            ->orderBy('sort_order')
-            ->get();
-
-        $data = $plans->map(fn (PlatformPlan $plan) => [
-            ...$plan->toArray(),
-            'subscribers' => $plan->subscriptions_count,
-            'active' => $plan->active_count,
-            'mrr' => $this->planMrr($plan),
-        ]);
-
-        return successResponse($data);
+        return successResponse(wrapPaginate($query, PlatformPlanResource::class));
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(PlatformPlanRequest $request): JsonResponse
     {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManagePlans);
+        $plan = PlatformPlan::create($request->validated());
 
-        $plan = PlatformPlan::query()->create($this->validated($request));
-
-        return successResponse($plan, __('api.created_success'), 201);
+        return successResponse(new PlatformPlanResource($plan->refresh()), __('api.created_success'), 201);
     }
 
-    public function update(Request $request, PlatformPlan $plan): JsonResponse
+    public function show(PlatformPlan $plan): JsonResponse
     {
-        $this->requirePlatformPermission(PlatformPermissionEnum::ManagePlans);
-
-        // Partial update: only supplied fields are written (an omitted optional field is
-        // not silently cleared or the plan silently retired).
-        $plan->update($this->validated($request, updating: true));
-
-        return successResponse($plan->refresh(), __('api.updated_success'));
+        return successResponse(new PlatformPlanResource($plan));
     }
 
-    /**
-     * MRR contributed by a plan's active subscriptions (yearly counted as price/12).
-     */
-    private function planMrr(PlatformPlan $plan): float
+    public function update(PlatformPlanRequest $request, PlatformPlan $plan): JsonResponse
     {
-        $mrr = $plan->subscriptions()
-            ->where('status', PlatformSubscriptionStatusEnum::Active->value)
-            ->get(['cycle', 'price'])
-            ->sum(fn ($s) => $s->cycle->value === 'yearly' ? (float) $s->price / 12 : (float) $s->price);
+        $plan->update($request->validated());
 
-        return round($mrr, 2);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function validated(Request $request, bool $updating = false): array
-    {
-        $required = $updating ? 'sometimes' : 'required';
-
-        return $request->validate([
-            'name' => [$required, 'string', 'min:1', 'max:120'],
-            'name_en' => ['nullable', 'string', 'max:120'],
-            'monthly_price' => [$required, 'numeric', 'min:0'],
-            'yearly_price' => [$required, 'numeric', 'min:0'],
-            'max_branches' => ['nullable', 'integer', 'min:1'],
-            'max_users' => ['nullable', 'integer', 'min:1'],
-            'features' => ['nullable', 'array'],
-            'feature_keys' => ['nullable', 'array'],
-            'is_popular' => ['nullable', 'boolean'],
-            'sort_order' => ['nullable', 'integer'],
-            'is_active' => ['nullable', 'boolean'],
-        ]);
+        return successResponse(new PlatformPlanResource($plan->refresh()), __('api.updated_success'));
     }
 }
