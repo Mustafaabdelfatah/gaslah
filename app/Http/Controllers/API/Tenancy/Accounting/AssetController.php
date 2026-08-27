@@ -19,7 +19,6 @@ class AssetController extends TenantController
 
     public function index(PageRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         $query = FixedAsset::query()
             ->where('organization_id', $this->organizationId())
@@ -31,7 +30,6 @@ class AssetController extends TenantController
 
     public function store(StoreAssetRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         $asset = $this->assets->create([
             ...$request->validated(),
@@ -43,7 +41,6 @@ class AssetController extends TenantController
 
     public function depreciate(FixedAsset $asset): JsonResponse
     {
-        $this->requireManager();
         $this->assertOwned($asset);
 
         return successResponse($this->assets->depreciate($asset), __('api.updated_success'));
@@ -51,7 +48,6 @@ class AssetController extends TenantController
 
     public function dispose(DisposeAssetRequest $request, FixedAsset $asset): JsonResponse
     {
-        $this->requireManager();
         $this->assertOwned($asset);
 
         return successResponse($this->assets->dispose($asset, $request->validated()), __('api.updated_success'));
@@ -59,7 +55,6 @@ class AssetController extends TenantController
 
     public function destroy(FixedAsset $asset): JsonResponse
     {
-        $this->requireManager();
         $this->assertOwned($asset);
 
         $this->assets->delete($asset);

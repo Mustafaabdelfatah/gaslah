@@ -33,7 +33,6 @@ class OrgSubscriptionController extends TenantController
      */
     public function subscription(): JsonResponse
     {
-        $this->requireManager();
 
         $subscription = $this->organization()->platformSubscription?->load('plan');
 

@@ -22,7 +22,6 @@ class PayoutController extends TenantController
 
     public function index(): JsonResponse
     {
-        $this->requireManager();
 
         return successResponse([
             'balance' => $this->payouts->unsettledSummary($this->organizationId()),
@@ -40,7 +39,6 @@ class PayoutController extends TenantController
      */
     public function config(PayoutConfigRequest $request): JsonResponse
     {
-        $this->requireSuperAdmin();
 
         $organization = $this->organization();
         $organization->update([
@@ -55,7 +53,6 @@ class PayoutController extends TenantController
      */
     public function request(): JsonResponse
     {
-        $this->requireSuperAdmin();
 
         $organization = $this->organization();
         $iban = $organization->payout_config['bank']['iban'] ?? null;

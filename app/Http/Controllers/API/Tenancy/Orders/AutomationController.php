@@ -14,14 +14,12 @@ class AutomationController extends TenantController
 {
     public function show(): JsonResponse
     {
-        $this->requireManager();
 
         return successResponse($this->settings());
     }
 
     public function update(AutomationSettingsRequest $request): JsonResponse
     {
-        $this->requireSuperAdmin();
 
         $setting = AutomationSetting::query()->updateOrCreate(
             ['organization_id' => $this->organizationId()],

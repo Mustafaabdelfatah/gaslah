@@ -22,14 +22,12 @@ class BankController extends TenantController
 
     public function reconciliation(BankReconciliationRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         return successResponse($this->bank->reconciliation($this->organizationId(), $request->limit()));
     }
 
     public function clear(ClearBankLineRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         return successResponse(
             $this->bank->toggleClear($this->organizationId(), $request->lineId(), $request->isCleared()),
@@ -38,14 +36,12 @@ class BankController extends TenantController
 
     public function clearAll(ClearAllBankLinesRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         return successResponse($this->bank->clearAll($this->organizationId(), $request->isCleared()));
     }
 
     public function statementBalance(StatementBalanceRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         return successResponse(
             $this->bank->setStatementBalance($this->organizationId(), $request->balance()),

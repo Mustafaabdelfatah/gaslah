@@ -16,7 +16,6 @@ class BooksLockController extends TenantController
 
     public function show(): JsonResponse
     {
-        $this->requireManager();
 
         return successResponse([
             'closed_through' => $this->booksLock->closedThrough($this->organizationId())?->toDateString(),
@@ -28,7 +27,6 @@ class BooksLockController extends TenantController
      */
     public function update(SetBooksLockRequest $request): JsonResponse
     {
-        $this->requireSuperAdmin();
 
         $lock = $this->booksLock->setClosedThrough(
             $this->organizationId(),

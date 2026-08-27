@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\API\Tenancy\Reports;
 
-use App\Enum\Tenancy\StaffPermissionEnum;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Reports\DateRangeRequest;
 use App\Http\Requests\Reports\TopCustomersRequest;
@@ -21,21 +20,18 @@ class ReportController extends TenantController
 
     public function sales(DateRangeRequest $request): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::ReportsView);
 
         return successResponse($this->reports->sales($this->readBranchIds(), $this->range($request)));
     }
 
     public function topProducts(DateRangeRequest $request): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::ReportsView);
 
         return successResponse($this->reports->topProducts($this->readBranchIds(), $this->range($request)));
     }
 
     public function topCustomers(TopCustomersRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         return successResponse(
             $this->reports->topCustomers($this->readBranchIds(), $this->range($request), $request->limit()),
@@ -44,7 +40,6 @@ class ReportController extends TenantController
 
     public function cancellationRate(DateRangeRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         return successResponse($this->reports->cancellationRate($this->readBranchIds(), $this->range($request)));
     }

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\API\Tenancy\Orders;
 
 use App\Enum\Orders\OrderStatusEnum;
-use App\Enum\Tenancy\StaffPermissionEnum;
 use App\Filters\Global\OrderByFilter;
 use App\Filters\Orders\OrderFilter;
 use App\Http\Controllers\API\Tenancy\TenantController;
@@ -69,7 +68,6 @@ class OrderController extends TenantController
      */
     public function paymentLink(Order $order): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::OrdersManage);
         $this->assertInReadScope($order);
 
         abort_if($order->status === OrderStatusEnum::Cancelled, Response::HTTP_UNPROCESSABLE_ENTITY, __('api.order_cancelled'));

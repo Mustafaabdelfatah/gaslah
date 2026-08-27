@@ -20,7 +20,6 @@ class AnalyticsController extends TenantController
     public function index(DateRangeRequest $request): JsonResponse
     {
         $this->staff();
-        $this->requireFeature('analytics');
 
         $range = $this->ranges->resolve($request->from(), $request->to());
 

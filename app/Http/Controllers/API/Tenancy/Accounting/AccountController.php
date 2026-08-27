@@ -22,7 +22,6 @@ class AccountController extends TenantController
      */
     public function index(): JsonResponse
     {
-        $this->requireManager();
         $this->chart->ensureChartOfAccounts($this->organizationId());
 
         // The chart is a fixed, small structure the whole UI needs at once — paginating
@@ -37,7 +36,6 @@ class AccountController extends TenantController
 
     public function store(StoreAccountRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         $data = $request->validated();
         $this->assertCodeIsFree($data['code']);
@@ -57,7 +55,6 @@ class AccountController extends TenantController
      */
     public function update(UpdateAccountRequest $request, Account $account): JsonResponse
     {
-        $this->requireManager();
         $this->assertOwned($account);
 
         $account->update($request->validated());

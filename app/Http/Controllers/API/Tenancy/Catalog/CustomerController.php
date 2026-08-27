@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\API\Tenancy\Catalog;
 
 use App\Enum\Payments\WalletTransactionTypeEnum;
-use App\Enum\Tenancy\StaffPermissionEnum;
 use App\Filters\Catalog\CustomerFilter;
 use App\Filters\Global\OrderByFilter;
 use App\Http\Controllers\API\Tenancy\TenantController;
@@ -26,7 +25,6 @@ class CustomerController extends TenantController
 
     public function index(PageRequest $request): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::CustomersManage);
 
         $query = app(Pipeline::class)
             ->send(Customer::query()->forOrganization($this->organizationId()))
@@ -38,7 +36,6 @@ class CustomerController extends TenantController
 
     public function store(CustomerRequest $request): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::CustomersManage);
 
         $customer = Customer::create([
             ...$request->validated(),
@@ -51,7 +48,6 @@ class CustomerController extends TenantController
 
     public function show(Customer $customer): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::CustomersManage);
         $this->assertOwned($customer);
 
         return successResponse(new CustomerResource($customer));
@@ -59,7 +55,6 @@ class CustomerController extends TenantController
 
     public function update(CustomerRequest $request, Customer $customer): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::CustomersManage);
         $this->assertOwned($customer);
 
         $customer->update($request->validated());
@@ -69,7 +64,6 @@ class CustomerController extends TenantController
 
     public function destroy(Customer $customer): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::CustomersManage);
         $this->assertOwned($customer);
 
         // A customer with order history is never deleted: orders reference them and the
@@ -87,7 +81,6 @@ class CustomerController extends TenantController
      */
     public function walletTopup(WalletTopupRequest $request, Customer $customer): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::CustomersManage);
         $this->assertOwned($customer);
 
         $result = $this->wallet->credit(
@@ -103,7 +96,6 @@ class CustomerController extends TenantController
 
     public function walletTransactions(Customer $customer): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::CustomersManage);
         $this->assertOwned($customer);
 
         return successResponse([

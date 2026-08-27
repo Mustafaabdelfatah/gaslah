@@ -228,7 +228,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     | Gaslah — Accounting (staff, manager-gated)
     |--------------------------------------------------------------------------
     */
-    Route::prefix('accounting')->group(function () {
+    Route::prefix('accounting')->middleware('tenant:manager')->group(function () {
         // Chart of accounts
         Route::get('accounts', [AccountController::class, 'index']);
         Route::post('accounts', [AccountController::class, 'store']);
@@ -252,13 +252,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('expenses', [ExpenseController::class, 'store']);
         Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy']);
 
-        // Period lock
+        // Period lock — reading it is a manager's business, moving it is the owner's,
+        // since reopening closed books can rewrite a filed period.
         Route::get('period-lock', [BooksLockController::class, 'show']);
-        Route::put('period-lock', [BooksLockController::class, 'update']);
+        Route::put('period-lock', [BooksLockController::class, 'update'])->middleware('tenant:super_admin');
     });
 
     // Fixed assets
-    Route::prefix('assets')->group(function () {
+    Route::prefix('assets')->middleware('tenant:manager')->group(function () {
         Route::get('/', [AssetController::class, 'index']);
         Route::post('/', [AssetController::class, 'store']);
         Route::post('{asset}/depreciate', [AssetController::class, 'depreciate']);
@@ -272,16 +273,23 @@ Route::middleware(['auth:sanctum'])->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::prefix('catalog')->group(function () {
+        // Any staff member reads the catalogue — the counter needs it to sell.
         Route::get('/', [CatalogController::class, 'index']);
-        Route::post('categories', [CatalogController::class, 'storeCategory']);
-        Route::put('categories/reorder', [CatalogController::class, 'reorderCategories']);
-        Route::post('products', [CatalogController::class, 'storeProduct']);
-        Route::patch('products/{product}', [CatalogController::class, 'updateProduct']);
-        Route::patch('products/{product}/code', [CatalogController::class, 'updateProductCode']);
-        Route::put('services/{service}', [CatalogController::class, 'updateService']);
+
+        Route::middleware('tenant:manager')->group(function () {
+            Route::post('categories', [CatalogController::class, 'storeCategory']);
+            Route::put('categories/reorder', [CatalogController::class, 'reorderCategories']);
+            Route::post('products', [CatalogController::class, 'storeProduct']);
+            Route::patch('products/{product}', [CatalogController::class, 'updateProduct']);
+            Route::put('services/{service}', [CatalogController::class, 'updateService']);
+        });
+
+        // A product code is what a barcode resolves to, so editing one has its own permission.
+        Route::patch('products/{product}/code', [CatalogController::class, 'updateProductCode'])
+            ->middleware('tenant:permission,catalog.manage_codes');
     });
 
-    Route::prefix('customers')->group(function () {
+    Route::prefix('customers')->middleware('tenant:permission,customers.manage')->group(function () {
         Route::get('/', [CustomerController::class, 'index']);
         Route::post('/', [CustomerController::class, 'store']);
         Route::get('{customer}', [CustomerController::class, 'show']);
@@ -296,25 +304,28 @@ Route::middleware(['auth:sanctum'])->group(function () {
     | Gaslah — Orders & POS (staff)
     |--------------------------------------------------------------------------
     */
-    Route::prefix('pos')->group(function () {
-        Route::post('orders', [PosController::class, 'store']);
+    Route::prefix('pos')->middleware('tenant:permission,pos.checkout')->group(function () {
+        // Taking money also needs a live subscription; reading never does.
+        Route::post('orders', [PosController::class, 'store'])->middleware('tenant:active');
         Route::post('otp/request', [PosController::class, 'otpRequest']);
         Route::post('otp/verify', [PosController::class, 'otpVerify']);
     });
 
     // Order auto-advance automation settings.
-    Route::get('automation', [AutomationController::class, 'show']);
-    Route::put('automation', [AutomationController::class, 'update']);
+    Route::get('automation', [AutomationController::class, 'show'])->middleware('tenant:manager');
+    Route::put('automation', [AutomationController::class, 'update'])->middleware('tenant:super_admin');
 
     Route::prefix('orders')->group(function () {
         Route::get('/', [OrderController::class, 'index']);
         Route::get('{order}', [OrderController::class, 'show']);
         Route::patch('{order}/status', [OrderController::class, 'updateStatus']);
-        Route::post('{order}/payment-link', [OrderController::class, 'paymentLink']);
+        Route::post('{order}/payment-link', [OrderController::class, 'paymentLink'])
+            ->middleware('tenant:permission,orders.manage');
 
         // ZATCA e-invoicing: Phase 1 instant QR + Phase 2 stored UBL invoice.
         Route::get('{order}/invoice', [ZatcaController::class, 'invoice']);
-        Route::post('{order}/zatca-invoice', [ZatcaPhase2Controller::class, 'store']);
+        Route::post('{order}/zatca-invoice', [ZatcaPhase2Controller::class, 'store'])
+            ->middleware('tenant:permission,orders.manage');
         Route::get('{order}/zatca-invoice', [ZatcaPhase2Controller::class, 'show']);
     });
 
@@ -323,15 +334,21 @@ Route::middleware(['auth:sanctum'])->group(function () {
     | Gaslah — Customer Subscriptions (staff, feature: subscriptions)
     |--------------------------------------------------------------------------
     */
-    Route::prefix('subscription-plans')->group(function () {
+    Route::prefix('subscription-plans')->middleware('tenant:feature,subscriptions')->group(function () {
         Route::get('/', [SubscriptionPlanController::class, 'index']);
-        Route::post('/', [SubscriptionPlanController::class, 'store']);
-        Route::put('{plan}', [SubscriptionPlanController::class, 'update']);
+
+        Route::middleware('tenant:manager')->group(function () {
+            Route::post('/', [SubscriptionPlanController::class, 'store']);
+            Route::put('{plan}', [SubscriptionPlanController::class, 'update']);
+        });
     });
 
-    Route::prefix('subscriptions')->group(function () {
+    Route::prefix('subscriptions')->middleware('tenant:feature,subscriptions')->group(function () {
         Route::get('/', [SubscriptionController::class, 'index']);
-        Route::post('/', [SubscriptionController::class, 'store']);
+
+        // Selling a package is a manager's call; collecting on one already sold is
+        // counter work, so any staff member may take the payment.
+        Route::post('/', [SubscriptionController::class, 'store'])->middleware('tenant:manager');
         Route::post('{subscription}/pay', [SubscriptionController::class, 'pay']);
     });
 
@@ -359,18 +376,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
     | Gaslah — Delivery (staff, feature: delivery)
     |--------------------------------------------------------------------------
     */
-    Route::prefix('delivery')->group(function () {
+    Route::prefix('delivery')->middleware('tenant:feature,delivery')->group(function () {
+        // Reads and day-to-day dispatch are open to any staff member: whoever is on the
+        // counter has to be able to book a pickup and hand it to a driver.
         Route::get('settings', [DeliveryController::class, 'settings']);
-        Route::put('settings', [DeliveryController::class, 'updateSettings']);
-
         Route::get('zones', [DeliveryController::class, 'zones']);
-        Route::post('zones', [DeliveryController::class, 'storeZone']);
-        Route::put('zones/{zone}', [DeliveryController::class, 'updateZone']);
-
         Route::get('drivers', [DeliveryController::class, 'drivers']);
-        Route::post('drivers', [DeliveryController::class, 'storeDriver']);
-        Route::put('drivers/{driver}', [DeliveryController::class, 'updateDriver']);
-
         Route::get('stats', [DeliveryController::class, 'stats']);
 
         Route::get('requests', [DeliveryController::class, 'requests']);
@@ -379,6 +390,17 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::patch('requests/{delivery}', [DeliveryController::class, 'updateRequest']);
         Route::post('requests/{delivery}/action', [DeliveryController::class, 'requestAction']);
         Route::post('requests/{delivery}/inventory', [DeliveryController::class, 'inventory']);
+
+        // Zones and drivers are configuration, not dispatch.
+        Route::middleware('tenant:manager')->group(function () {
+            Route::post('zones', [DeliveryController::class, 'storeZone']);
+            Route::put('zones/{zone}', [DeliveryController::class, 'updateZone']);
+            Route::post('drivers', [DeliveryController::class, 'storeDriver']);
+            Route::put('drivers/{driver}', [DeliveryController::class, 'updateDriver']);
+        });
+
+        // Which delivery methods the tenant offers, and what it charges, is the owner's.
+        Route::put('settings', [DeliveryController::class, 'updateSettings'])->middleware('tenant:super_admin');
     });
 
     // Mint an in-store display link for a branch.
@@ -389,10 +411,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
     | Gaslah — Payouts (organization side)
     |--------------------------------------------------------------------------
     */
-    Route::prefix('payouts')->group(function () {
+    Route::prefix('payouts')->middleware('tenant:manager')->group(function () {
         Route::get('/', [PayoutController::class, 'index']);
-        Route::patch('config', [PayoutController::class, 'config']);
         Route::post('request', [PayoutController::class, 'request']);
+
+        // The receiving bank account is where the tenant's money lands, so only the owner
+        // may point it somewhere else.
+        Route::patch('config', [PayoutController::class, 'config'])->middleware('tenant:super_admin');
     });
 
     /*
@@ -400,14 +425,18 @@ Route::middleware(['auth:sanctum'])->group(function () {
     | Gaslah — Reports (staff, read-only)
     |--------------------------------------------------------------------------
     */
-    Route::prefix('reports')->group(function () {
+    Route::prefix('reports')->middleware('tenant:permission,reports.view')->group(function () {
         Route::get('sales', [SalesReportController::class, 'sales']);
         Route::get('top-products', [SalesReportController::class, 'topProducts']);
-        Route::get('top-customers', [SalesReportController::class, 'topCustomers']);
-        Route::get('cancellation-rate', [SalesReportController::class, 'cancellationRate']);
+
+        // Naming the best customers, and judging cancellations, is a manager's view.
+        Route::middleware('tenant:manager')->group(function () {
+            Route::get('top-customers', [SalesReportController::class, 'topCustomers']);
+            Route::get('cancellation-rate', [SalesReportController::class, 'cancellationRate']);
+        });
     });
 
-    Route::get('analytics', [AnalyticsController::class, 'index']);
+    Route::get('analytics', [AnalyticsController::class, 'index'])->middleware('tenant:feature,analytics');
     Route::get('dashboard', [DashboardController::class, 'index']);
 
     /*
@@ -415,14 +444,19 @@ Route::middleware(['auth:sanctum'])->group(function () {
     | Gaslah — WhatsApp screen (staff, feature: messaging)
     |--------------------------------------------------------------------------
     */
-    Route::prefix('wa')->group(function () {
+    Route::prefix('wa')->middleware('tenant:feature,messaging')->group(function () {
         Route::get('overview', [WaController::class, 'overview']);
         Route::get('messages', [WaController::class, 'messages']);
         Route::get('templates', [WaController::class, 'templates']);
-        Route::post('templates', [WaController::class, 'storeTemplate']);
-        Route::put('templates/{template}', [WaController::class, 'updateTemplate']);
-        Route::delete('templates/{template}', [WaController::class, 'deleteTemplate']);
-        Route::post('test', [WaController::class, 'test']);
+
+        // Template wording is what customers receive in the tenant's name, and the test
+        // message spends real quota, so both are manager-gated.
+        Route::middleware('tenant:manager')->group(function () {
+            Route::post('templates', [WaController::class, 'storeTemplate']);
+            Route::put('templates/{template}', [WaController::class, 'updateTemplate']);
+            Route::delete('templates/{template}', [WaController::class, 'deleteTemplate']);
+            Route::post('test', [WaController::class, 'test']);
+        });
     });
 
     // Live operational alerts + outbound message log (a distinct path from the
@@ -437,7 +471,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     */
     // Organization's own platform subscription view.
     Route::get('org/entitlements', [OrgSubscriptionController::class, 'entitlements']);
-    Route::get('org/subscription', [OrgSubscriptionController::class, 'subscription']);
+    Route::get('org/subscription', [OrgSubscriptionController::class, 'subscription'])->middleware('tenant:manager');
     Route::get('org/notices', [OrgNoticeController::class, 'index']);
 
     Route::get('community', [CommunityController::class, 'feed']);
@@ -452,9 +486,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Organization announcements (portal carousel; writes manager-gated).
     Route::prefix('announcements')->group(function () {
         Route::get('/', [OrgAnnouncementController::class, 'index']);
-        Route::post('/', [OrgAnnouncementController::class, 'store']);
-        Route::put('{announcement}', [OrgAnnouncementController::class, 'update']);
-        Route::delete('{announcement}', [OrgAnnouncementController::class, 'destroy']);
+
+        Route::middleware('tenant:manager')->group(function () {
+            Route::post('/', [OrgAnnouncementController::class, 'store']);
+            Route::put('{announcement}', [OrgAnnouncementController::class, 'update']);
+            Route::delete('{announcement}', [OrgAnnouncementController::class, 'destroy']);
+        });
     });
 
     /*
@@ -487,7 +524,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     | Gaslah — Shifts (staff, permission: shifts.manage)
     |--------------------------------------------------------------------------
     */
-    Route::prefix('shifts')->group(function () {
+    Route::prefix('shifts')->middleware('tenant:permission,shifts.manage')->group(function () {
         Route::get('current', [ShiftController::class, 'current']);
         Route::get('/', [ShiftController::class, 'index']);
         Route::post('open', [ShiftController::class, 'open']);
@@ -499,7 +536,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     | Gaslah — Bank Reconciliation (manager, org-level)
     |--------------------------------------------------------------------------
     */
-    Route::prefix('bank')->group(function () {
+    Route::prefix('bank')->middleware('tenant:manager')->group(function () {
         Route::get('reconciliation', [BankController::class, 'reconciliation']);
         Route::post('clear', [BankController::class, 'clear']);
         Route::post('clear-all', [BankController::class, 'clearAll']);

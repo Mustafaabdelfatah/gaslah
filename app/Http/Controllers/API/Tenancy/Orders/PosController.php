@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\API\Tenancy\Orders;
 
 use App\Enum\Messaging\WaEventEnum;
-use App\Enum\Tenancy\StaffPermissionEnum;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Orders\PosOtpRequest;
 use App\Http\Requests\Orders\StoreOrderRequest;
@@ -32,8 +31,6 @@ class PosController extends TenantController
      */
     public function store(StoreOrderRequest $request): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::PosCheckout);
-        $this->requireActiveSubscription();
 
         $branch = Branch::query()
             ->where('organization_id', $this->organizationId())
@@ -63,7 +60,6 @@ class PosController extends TenantController
      */
     public function otpRequest(PosOtpRequest $request): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::PosCheckout);
 
         return successResponse($this->otp->request($this->ownedCustomer($request->customerId())));
     }
@@ -73,7 +69,6 @@ class PosController extends TenantController
      */
     public function otpVerify(VerifyPosOtpRequest $request): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::PosCheckout);
 
         $customer = $this->ownedCustomer($request->customerId());
 

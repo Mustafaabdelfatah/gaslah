@@ -11,12 +11,9 @@ use Illuminate\Http\JsonResponse;
 
 class SubscriptionPlanController extends TenantController
 {
-    private const FEATURE = 'subscriptions';
-
     public function index(PageRequest $request): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         $query = SubscriptionPlan::query()
             ->forOrganization($this->organizationId())
@@ -28,8 +25,6 @@ class SubscriptionPlanController extends TenantController
 
     public function store(SubscriptionPlanRequest $request): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
 
         $plan = SubscriptionPlan::query()->create([
             ...$request->validated(),
@@ -41,8 +36,6 @@ class SubscriptionPlanController extends TenantController
 
     public function update(SubscriptionPlanRequest $request, SubscriptionPlan $plan): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
         $this->assertOwned($plan);
 
         $plan->update($request->validated());

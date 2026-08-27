@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\API\Tenancy\Catalog;
 
 use App\Enum\Catalog\ServiceTypeEnum;
-use App\Enum\Tenancy\StaffPermissionEnum;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Catalog\ReorderCategoriesRequest;
 use App\Http\Requests\Catalog\ServiceCategoryRequest;
@@ -44,7 +43,6 @@ class CatalogController extends TenantController
 
     public function storeCategory(ServiceCategoryRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         $category = $this->catalog->createCategory($this->organizationId(), $request->validated());
 
@@ -53,7 +51,6 @@ class CatalogController extends TenantController
 
     public function storeProduct(StoreProductRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         $product = $this->catalog->createProduct($this->organizationId(), $request->validated());
 
@@ -62,7 +59,6 @@ class CatalogController extends TenantController
 
     public function updateProduct(UpdateProductRequest $request, Product $product): JsonResponse
     {
-        $this->requireManager();
         $this->assertOwned($product);
 
         $product = $this->catalog->renameProduct($product, $request->validated());
@@ -75,7 +71,6 @@ class CatalogController extends TenantController
      */
     public function updateProductCode(UpdateProductCodeRequest $request, Product $product): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::CatalogManageCodes);
         $this->assertOwned($product);
 
         $product->update($request->validated());
@@ -88,7 +83,6 @@ class CatalogController extends TenantController
      */
     public function updateService(UpdateServiceRequest $request, Service $service): JsonResponse
     {
-        $this->requireManager();
         $this->assertOwned($service);
 
         $service->update($request->validated());
@@ -98,7 +92,6 @@ class CatalogController extends TenantController
 
     public function reorderCategories(ReorderCategoriesRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         $this->catalog->reorder(ServiceCategory::class, $this->organizationId(), $request->ids());
 

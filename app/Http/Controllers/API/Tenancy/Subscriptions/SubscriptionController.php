@@ -14,8 +14,6 @@ use Illuminate\Http\JsonResponse;
 
 class SubscriptionController extends TenantController
 {
-    private const FEATURE = 'subscriptions';
-
     public function __construct(private readonly SubscriptionService $subscriptions)
     {
         parent::__construct();
@@ -24,7 +22,6 @@ class SubscriptionController extends TenantController
     public function index(PageRequest $request): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         $query = Subscription::query()
             ->inBranches($this->readBranchIds())
@@ -42,8 +39,6 @@ class SubscriptionController extends TenantController
      */
     public function store(PurchaseSubscriptionRequest $request): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
 
         $subscription = $this->subscriptions->purchase($request->plan(), $request->customer());
 
@@ -63,7 +58,6 @@ class SubscriptionController extends TenantController
     public function pay(PaySubscriptionRequest $request, Subscription $subscription): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
         $this->assertOwned($subscription);
 
         $subscription->load('plan', 'customer');

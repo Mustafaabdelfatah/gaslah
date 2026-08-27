@@ -20,21 +20,18 @@ class AccountingReportController extends TenantController
 
     public function trialBalance(ReportFilterRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         return successResponse($this->reports->trialBalance($this->organizationId(), $request->toFilter()));
     }
 
     public function incomeStatement(ReportFilterRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         return successResponse($this->reports->incomeStatement($this->organizationId(), $request->toFilter()));
     }
 
     public function balanceSheet(ReportFilterRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         return successResponse($this->reports->balanceSheet(
             $this->organizationId(),
@@ -45,14 +42,12 @@ class AccountingReportController extends TenantController
 
     public function vatReturn(ReportFilterRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         return successResponse($this->reports->vatReturn($this->organizationId(), $request->toFilter()));
     }
 
     public function ledger(ReportFilterRequest $request, Account $account): JsonResponse
     {
-        $this->requireManager();
         abort_unless($account->organization_id === $this->organizationId(), 404, __('api.record_not_found'));
 
         return successResponse($this->reports->ledger($account, $request->input('from'), $request->input('to')));

@@ -18,7 +18,6 @@ class ExpenseController extends TenantController
 
     public function index(PageRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         $query = Expense::query()
             ->where('organization_id', $this->organizationId())
@@ -31,7 +30,6 @@ class ExpenseController extends TenantController
 
     public function store(StoreExpenseRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         $expense = $this->expenses->record([
             ...$request->validated(),
@@ -44,7 +42,6 @@ class ExpenseController extends TenantController
 
     public function destroy(Expense $expense): JsonResponse
     {
-        $this->requireManager();
         abort_unless($expense->organization_id === $this->organizationId(), 404, __('api.record_not_found'));
 
         $this->expenses->reverseAndDelete($expense, $this->staff()->getKey());

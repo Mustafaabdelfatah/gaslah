@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\API\Tenancy\Zatca;
 
-use App\Enum\Tenancy\StaffPermissionEnum;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Models\Order;
 use App\Models\ZatcaInvoice;
@@ -21,7 +20,6 @@ class ZatcaPhase2Controller extends TenantController
 
     public function store(Order $order): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::OrdersManage);
         $this->assertInReadScope($order);
 
         $invoice = $this->invoices->generate($order, $this->organization());

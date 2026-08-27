@@ -34,8 +34,6 @@ use Illuminate\Support\Facades\URL;
 
 class DeliveryController extends TenantController
 {
-    private const FEATURE = 'delivery';
-
     public function __construct(
         private readonly DeliverySettingsService $settings,
         private readonly DeliveryService $delivery,
@@ -52,7 +50,6 @@ class DeliveryController extends TenantController
     public function settings(): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         return successResponse($this->settings->resolve($this->organizationId()));
     }
@@ -60,8 +57,6 @@ class DeliveryController extends TenantController
     public function updateSettings(DeliverySettingsRequest $request): JsonResponse
     {
         // Only the general manager may change delivery configuration.
-        $this->requireSuperAdmin();
-        $this->requireFeature(self::FEATURE);
 
         return successResponse(
             $this->settings->save($this->organizationId(), $request->validated()),
@@ -77,7 +72,6 @@ class DeliveryController extends TenantController
     public function zones(): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         // A branch's zones are a small, hand-curated list, so this is deliberately not
         // paginated — the counter needs all of them to price a delivery.
@@ -92,8 +86,6 @@ class DeliveryController extends TenantController
 
     public function storeZone(DeliveryZoneRequest $request): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
 
         $branchId = $this->writeBranchId();
         $sortOrder = DeliveryZone::query()->where('branch_id', $branchId)->count();
@@ -110,8 +102,6 @@ class DeliveryController extends TenantController
 
     public function updateZone(DeliveryZoneRequest $request, DeliveryZone $zone): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
         $this->assertOwned($zone);
 
         $zone->update($request->validated());
@@ -127,7 +117,6 @@ class DeliveryController extends TenantController
     public function drivers(): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         $settings = $this->settings->resolve($this->organizationId());
         // The assignable set is small by nature (a branch's own drivers plus any platform
@@ -141,8 +130,6 @@ class DeliveryController extends TenantController
 
     public function storeDriver(DriverRequest $request): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
 
         $driver = Driver::query()->create([
             ...$request->validated(),
@@ -156,8 +143,6 @@ class DeliveryController extends TenantController
 
     public function updateDriver(DriverRequest $request, Driver $driver): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
         $this->assertOwnedDriver($driver);
 
         $driver->update($request->validated());
@@ -173,7 +158,6 @@ class DeliveryController extends TenantController
     public function requests(PageRequest $request): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         $query = app(Pipeline::class)
             ->send(DeliveryRequest::query()
@@ -188,7 +172,6 @@ class DeliveryController extends TenantController
     public function showRequest(DeliveryRequest $delivery): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
         $this->assertInReadScope($delivery);
 
         $delivery->load('customer', 'driver', 'order', 'zone', 'history');
@@ -202,7 +185,6 @@ class DeliveryController extends TenantController
     public function storeRequest(StoreDeliveryRequestRequest $request): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         $customer = $this->ownedCustomer((int) $request->input('customer_id'));
         $this->assertOrderOwned($request->input('order_id'));
@@ -229,7 +211,6 @@ class DeliveryController extends TenantController
     public function updateRequest(AssignDeliveryRequest $request, DeliveryRequest $delivery): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
         $this->assertInReadScope($delivery);
 
         $data = $request->validated();
@@ -259,7 +240,6 @@ class DeliveryController extends TenantController
     public function requestAction(DeliveryActionRequest $request, DeliveryRequest $delivery): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
         $this->assertInReadScope($delivery);
 
         $userId = $this->staff()->getKey();
@@ -278,7 +258,6 @@ class DeliveryController extends TenantController
     public function inventory(DeliveryInventoryRequest $request, DeliveryRequest $delivery): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
         $this->assertInReadScope($delivery);
 
         $branch = Branch::query()->where('organization_id', $this->organizationId())->findOrFail($delivery->branch_id);
@@ -298,7 +277,6 @@ class DeliveryController extends TenantController
     public function stats(): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         return successResponse($this->requests->stats($this->readBranchIds()));
     }

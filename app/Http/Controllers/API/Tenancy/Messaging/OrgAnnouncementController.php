@@ -26,7 +26,6 @@ class OrgAnnouncementController extends TenantController
 
     public function store(OrgAnnouncementRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         $announcement = OrgAnnouncement::query()->create([
             ...$request->validated(),
@@ -38,7 +37,6 @@ class OrgAnnouncementController extends TenantController
 
     public function update(OrgAnnouncementRequest $request, OrgAnnouncement $announcement): JsonResponse
     {
-        $this->requireManager();
         $this->assertOwned($announcement);
 
         $announcement->update($request->validated());
@@ -48,7 +46,6 @@ class OrgAnnouncementController extends TenantController
 
     public function destroy(OrgAnnouncement $announcement): JsonResponse
     {
-        $this->requireManager();
         $this->assertOwned($announcement);
 
         $announcement->delete();

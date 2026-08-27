@@ -19,8 +19,6 @@ use Illuminate\Http\Request;
  */
 class WaController extends TenantController
 {
-    private const FEATURE = 'messaging';
-
     private const HIDDEN_OTP = '•••• رمز تحقق (مخفي)';
 
     public function __construct(private readonly WaService $wa)
@@ -31,7 +29,6 @@ class WaController extends TenantController
     public function overview(): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         $organizationId = $this->organizationId();
 
@@ -50,7 +47,6 @@ class WaController extends TenantController
     public function messages(Request $request): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         $limit = min((int) $request->input('limit', 100), 200);
 
@@ -77,7 +73,6 @@ class WaController extends TenantController
     public function templates(): JsonResponse
     {
         $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         return successResponse([
             'org' => WaTemplate::query()->where('organization_id', $this->organizationId())->latest('id')->get(),
@@ -89,8 +84,6 @@ class WaController extends TenantController
 
     public function storeTemplate(WaTemplateRequest $request): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
 
         $template = WaTemplate::query()->create([
             ...$request->validated(),
@@ -103,8 +96,6 @@ class WaController extends TenantController
 
     public function updateTemplate(WaTemplateRequest $request, WaTemplate $template): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
         $this->assertOwned($template);
 
         $template->update($request->validated());
@@ -114,8 +105,6 @@ class WaController extends TenantController
 
     public function deleteTemplate(WaTemplate $template): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
         $this->assertOwned($template);
 
         $template->delete();
@@ -128,8 +117,6 @@ class WaController extends TenantController
      */
     public function test(SendTestMessageRequest $request): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
 
         $message = $this->wa->queue([
             'organization_id' => $this->organizationId(),

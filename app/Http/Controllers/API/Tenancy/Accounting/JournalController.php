@@ -24,7 +24,6 @@ class JournalController extends TenantController
 
     public function index(PageRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         $query = JournalEntry::query()
             ->where('organization_id', $this->organizationId())
@@ -39,7 +38,6 @@ class JournalController extends TenantController
 
     public function show(JournalEntry $journal): JsonResponse
     {
-        $this->requireManager();
         $this->assertOwned($journal);
 
         return successResponse($journal->load('lines'));
@@ -50,7 +48,6 @@ class JournalController extends TenantController
      */
     public function store(StoreJournalRequest $request): JsonResponse
     {
-        $this->requireManager();
 
         $organizationId = $this->organizationId();
         $data = $request->validated();
@@ -80,7 +77,6 @@ class JournalController extends TenantController
      */
     public function reverse(JournalEntry $journal): JsonResponse
     {
-        $this->requireManager();
         $this->assertOwned($journal);
 
         $reversal = $this->posting->reverse($journal, $this->staff()->getKey());

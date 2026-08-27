@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\API\Tenancy\Reports;
 
-use App\Enum\Tenancy\StaffPermissionEnum;
 use App\Filters\Global\OrderByFilter;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Global\Other\PageRequest;
@@ -24,7 +23,6 @@ class ShiftController extends TenantController
 
     public function index(PageRequest $request): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::ShiftsManage);
 
         $query = app(Pipeline::class)
             ->send(Shift::query()->inBranches($this->readBranchIds())->with(['user:id,name', 'branch:id,name']))
@@ -36,7 +34,6 @@ class ShiftController extends TenantController
 
     public function current(): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::ShiftsManage);
 
         $shift = $this->shifts->current($this->staff()->getKey());
 
@@ -48,7 +45,6 @@ class ShiftController extends TenantController
 
     public function open(OpenShiftRequest $request): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::ShiftsManage);
 
         $summary = $this->shifts->open(
             $this->organizationId(),
@@ -62,7 +58,6 @@ class ShiftController extends TenantController
 
     public function close(CloseShiftRequest $request): JsonResponse
     {
-        $this->requirePermission(StaffPermissionEnum::ShiftsManage);
 
         $shift = $this->shifts->current($this->staff()->getKey());
         abort_if($shift === null, Response::HTTP_UNPROCESSABLE_ENTITY, __('api.shift_none_open'));
