@@ -3,20 +3,15 @@
 namespace App\Http\Controllers\API\Tenancy\Inventory;
 
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Inventory\InventoryItemRequest;
 use App\Models\InventoryItem;
 use App\Models\PurchaseOrder;
-use App\Models\Unit;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class InventoryController extends TenantController
 {
-    private const FEATURE = 'inventory';
-
     public function items(): JsonResponse
     {
-        $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         $items = InventoryItem::query()
             ->forOrganization($this->organizationId())
@@ -33,16 +28,11 @@ class InventoryController extends TenantController
         ]);
     }
 
-    public function storeItem(Request $request): JsonResponse
+    public function storeItem(InventoryItemRequest $request): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
-
-        $data = $this->validated($request);
-        $this->assertUnitInOrg((int) $data['unit_id']);
 
         $item = InventoryItem::query()->create([
-            ...$data,
+            ...$request->validated(),
             'organization_id' => $this->organizationId(),
             'branch_id' => $this->writeBranchId(),
         ]);
@@ -50,27 +40,17 @@ class InventoryController extends TenantController
         return successResponse($item, __('api.created_success'), 201);
     }
 
-    public function updateItem(Request $request, InventoryItem $item): JsonResponse
+    public function updateItem(InventoryItemRequest $request, InventoryItem $item): JsonResponse
     {
-        $this->requireManager();
-        $this->requireFeature(self::FEATURE);
         $this->assertInReadScope($item);
 
-        $data = $this->validated($request, updating: true);
-
-        if (isset($data['unit_id'])) {
-            $this->assertUnitInOrg((int) $data['unit_id']);
-        }
-
-        $item->update($data);
+        $item->update($request->validated());
 
         return successResponse($item->refresh(), __('api.updated_success'));
     }
 
     public function lowStock(): JsonResponse
     {
-        $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         $items = InventoryItem::query()
             ->forOrganization($this->organizationId())
@@ -89,8 +69,6 @@ class InventoryController extends TenantController
      */
     public function purchaseOrders(): JsonResponse
     {
-        $this->staff();
-        $this->requireFeature(self::FEATURE);
 
         $orders = PurchaseOrder::query()
             ->inBranches($this->readBranchIds())
@@ -113,35 +91,5 @@ class InventoryController extends TenantController
         ]);
 
         return successResponse($data);
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Helper Methods
-    |--------------------------------------------------------------------------
-    */
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function validated(Request $request, bool $updating = false): array
-    {
-        $required = $updating ? 'sometimes' : 'required';
-
-        return $request->validate([
-            'name' => [$required, 'string', 'min:2', 'max:200'],
-            'unit_id' => [$required, 'integer'],
-            'sku' => ['nullable', 'string', 'max:80'],
-            'cost' => ['nullable', 'numeric', 'min:0'],
-            'quantity' => ['nullable', 'numeric', 'min:0'],
-            'reorder_level' => ['nullable', 'numeric', 'min:0'],
-            'is_active' => ['nullable', 'boolean'],
-        ]);
-    }
-
-    private function assertUnitInOrg(int $unitId): void
-    {
-        $exists = Unit::query()->forOrganization($this->organizationId())->whereKey($unitId)->exists();
-        abort_unless($exists, 422, __('api.inventory_unit_not_in_org'));
     }
 }

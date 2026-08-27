@@ -458,18 +458,24 @@ Route::middleware(['auth:sanctum'])->group(function () {
     | Gaslah — Inventory, Suppliers & Purchase Orders (feature: inventory)
     |--------------------------------------------------------------------------
     */
-    Route::prefix('inventory')->group(function () {
+    Route::prefix('inventory')->middleware('tenant:feature,inventory')->group(function () {
         Route::get('items', [InventoryController::class, 'items']);
-        Route::post('items', [InventoryController::class, 'storeItem']);
-        Route::put('items/{item}', [InventoryController::class, 'updateItem']);
         Route::get('low-stock', [InventoryController::class, 'lowStock']);
         Route::get('purchase-orders', [InventoryController::class, 'purchaseOrders']);
+
+        Route::middleware('tenant:manager')->group(function () {
+            Route::post('items', [InventoryController::class, 'storeItem']);
+            Route::put('items/{item}', [InventoryController::class, 'updateItem']);
+        });
     });
 
-    Route::prefix('suppliers')->group(function () {
+    Route::prefix('suppliers')->middleware('tenant:feature,inventory')->group(function () {
         Route::get('/', [SupplierController::class, 'index']);
-        Route::post('/', [SupplierController::class, 'store']);
-        Route::put('{supplier}', [SupplierController::class, 'update']);
+
+        Route::middleware('tenant:manager')->group(function () {
+            Route::post('/', [SupplierController::class, 'store']);
+            Route::put('{supplier}', [SupplierController::class, 'update']);
+        });
     });
 
     /*

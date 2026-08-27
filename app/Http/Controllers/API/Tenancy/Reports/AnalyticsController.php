@@ -3,10 +3,10 @@
 namespace App\Http\Controllers\API\Tenancy\Reports;
 
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Reports\DateRangeRequest;
 use App\Services\Reports\AnalyticsService;
 use App\Services\Reports\ReportRangeService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class AnalyticsController extends TenantController
 {
@@ -17,13 +17,12 @@ class AnalyticsController extends TenantController
         parent::__construct();
     }
 
-    public function index(Request $request): JsonResponse
+    public function index(DateRangeRequest $request): JsonResponse
     {
         $this->staff();
         $this->requireFeature('analytics');
 
-        $request->validate(['from' => ['nullable', 'date'], 'to' => ['nullable', 'date']]);
-        $range = $this->ranges->resolve($request->input('from'), $request->input('to'));
+        $range = $this->ranges->resolve($request->from(), $request->to());
 
         return successResponse($this->analytics->build($this->readBranchIds(), $range));
     }

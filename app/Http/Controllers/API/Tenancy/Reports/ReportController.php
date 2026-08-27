@@ -4,10 +4,11 @@ namespace App\Http\Controllers\API\Tenancy\Reports;
 
 use App\Enum\Tenancy\StaffPermissionEnum;
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Reports\DateRangeRequest;
+use App\Http\Requests\Reports\TopCustomersRequest;
 use App\Services\Reports\ReportRangeService;
 use App\Services\Reports\ReportService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class ReportController extends TenantController
 {
@@ -18,63 +19,44 @@ class ReportController extends TenantController
         parent::__construct();
     }
 
-    public function sales(Request $request): JsonResponse
+    public function sales(DateRangeRequest $request): JsonResponse
     {
         $this->requirePermission(StaffPermissionEnum::ReportsView);
 
         return successResponse($this->reports->sales($this->readBranchIds(), $this->range($request)));
     }
 
-    public function topProducts(Request $request): JsonResponse
+    public function topProducts(DateRangeRequest $request): JsonResponse
     {
         $this->requirePermission(StaffPermissionEnum::ReportsView);
 
         return successResponse($this->reports->topProducts($this->readBranchIds(), $this->range($request)));
     }
 
-    public function topCustomers(Request $request): JsonResponse
+    public function topCustomers(TopCustomersRequest $request): JsonResponse
     {
         $this->requireManager();
 
-        $data = $this->validateRange($request, ['limit' => ['nullable', 'integer', 'min:1', 'max:100']]);
-        $limit = (int) ($data['limit'] ?? 10);
-
-        return successResponse($this->reports->topCustomers($this->readBranchIds(), $this->range($request), $limit));
+        return successResponse(
+            $this->reports->topCustomers($this->readBranchIds(), $this->range($request), $request->limit()),
+        );
     }
 
-    public function cancellationRate(Request $request): JsonResponse
+    public function cancellationRate(DateRangeRequest $request): JsonResponse
     {
         $this->requireManager();
 
         return successResponse($this->reports->cancellationRate($this->readBranchIds(), $this->range($request)));
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Helper Methods
-    |--------------------------------------------------------------------------
-    */
-
     /**
+     * The resolved reporting window — the range service supplies the tenant's defaults and
+     * clamps anything unreasonable.
+     *
      * @return array<string, mixed>
      */
-    private function range(Request $request): array
+    private function range(DateRangeRequest $request): array
     {
-        $this->validateRange($request);
-
-        return $this->ranges->resolve($request->input('from'), $request->input('to'));
-    }
-
-    /**
-     * @param  array<string, mixed>  $extra
-     * @return array<string, mixed>
-     */
-    private function validateRange(Request $request, array $extra = []): array
-    {
-        return $request->validate([
-            'from' => ['nullable', 'date'],
-            'to' => ['nullable', 'date'],
-            ...$extra,
-        ]);
+        return $this->ranges->resolve($request->from(), $request->to());
     }
 }

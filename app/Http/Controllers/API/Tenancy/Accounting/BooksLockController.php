@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\API\Tenancy\Accounting;
 
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Accounting\SetBooksLockRequest;
 use App\Services\Accounting\BooksLockService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class BooksLockController extends TenantController
 {
@@ -26,17 +26,13 @@ class BooksLockController extends TenantController
     /**
      * Set or clear the period lock. Owner-only, since it can reopen closed books.
      */
-    public function update(Request $request): JsonResponse
+    public function update(SetBooksLockRequest $request): JsonResponse
     {
         $this->requireSuperAdmin();
 
-        $data = $request->validate([
-            'closed_through' => ['nullable', 'date'],
-        ]);
-
         $lock = $this->booksLock->setClosedThrough(
             $this->organizationId(),
-            $data['closed_through'] ?? null,
+            $request->closedThrough(),
             $this->staff()->getKey(),
         );
 

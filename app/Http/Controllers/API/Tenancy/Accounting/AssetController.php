@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\API\Tenancy\Accounting;
 
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Accounting\DisposeAssetRequest;
 use App\Http\Requests\Accounting\StoreAssetRequest;
 use App\Http\Requests\Global\Other\PageRequest;
 use App\Models\FixedAsset;
 use App\Services\Accounting\AssetService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class AssetController extends TenantController
 {
@@ -49,18 +49,12 @@ class AssetController extends TenantController
         return successResponse($this->assets->depreciate($asset), __('api.updated_success'));
     }
 
-    public function dispose(Request $request, FixedAsset $asset): JsonResponse
+    public function dispose(DisposeAssetRequest $request, FixedAsset $asset): JsonResponse
     {
         $this->requireManager();
         $this->assertOwned($asset);
 
-        $data = $request->validate([
-            'proceeds' => ['nullable', 'numeric', 'min:0'],
-            'via' => ['nullable', 'in:cash,bank'],
-            'date' => ['nullable', 'date'],
-        ]);
-
-        return successResponse($this->assets->dispose($asset, $data), __('api.updated_success'));
+        return successResponse($this->assets->dispose($asset, $request->validated()), __('api.updated_success'));
     }
 
     public function destroy(FixedAsset $asset): JsonResponse

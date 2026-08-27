@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\API\Tenancy\Reports;
 
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Reports\BankReconciliationRequest;
+use App\Http\Requests\Reports\ClearAllBankLinesRequest;
+use App\Http\Requests\Reports\ClearBankLineRequest;
+use App\Http\Requests\Reports\StatementBalanceRequest;
 use App\Services\Reports\BankService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 /**
  * Organization-level bank reconciliation — manager gated.
@@ -17,42 +20,36 @@ class BankController extends TenantController
         parent::__construct();
     }
 
-    public function reconciliation(Request $request): JsonResponse
+    public function reconciliation(BankReconciliationRequest $request): JsonResponse
     {
         $this->requireManager();
 
-        $data = $request->validate(['limit' => ['nullable', 'integer', 'min:1', 'max:2000']]);
-
-        return successResponse($this->bank->reconciliation($this->organizationId(), (int) ($data['limit'] ?? 500)));
+        return successResponse($this->bank->reconciliation($this->organizationId(), $request->limit()));
     }
 
-    public function clear(Request $request): JsonResponse
+    public function clear(ClearBankLineRequest $request): JsonResponse
     {
         $this->requireManager();
 
-        $data = $request->validate([
-            'line_id' => ['required', 'integer'],
-            'cleared' => ['required', 'boolean'],
-        ]);
-
-        return successResponse($this->bank->toggleClear($this->organizationId(), (int) $data['line_id'], (bool) $data['cleared']));
+        return successResponse(
+            $this->bank->toggleClear($this->organizationId(), $request->lineId(), $request->isCleared()),
+        );
     }
 
-    public function clearAll(Request $request): JsonResponse
+    public function clearAll(ClearAllBankLinesRequest $request): JsonResponse
     {
         $this->requireManager();
 
-        $data = $request->validate(['cleared' => ['required', 'boolean']]);
-
-        return successResponse($this->bank->clearAll($this->organizationId(), (bool) $data['cleared']));
+        return successResponse($this->bank->clearAll($this->organizationId(), $request->isCleared()));
     }
 
-    public function statementBalance(Request $request): JsonResponse
+    public function statementBalance(StatementBalanceRequest $request): JsonResponse
     {
         $this->requireManager();
 
-        $data = $request->validate(['balance' => ['required', 'numeric']]);
-
-        return successResponse($this->bank->setStatementBalance($this->organizationId(), (float) $data['balance']), __('api.updated_success'));
+        return successResponse(
+            $this->bank->setStatementBalance($this->organizationId(), $request->balance()),
+            __('api.updated_success'),
+        );
     }
 }

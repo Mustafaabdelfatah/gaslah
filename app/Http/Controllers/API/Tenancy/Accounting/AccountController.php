@@ -4,10 +4,10 @@ namespace App\Http\Controllers\API\Tenancy\Accounting;
 
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Accounting\StoreAccountRequest;
+use App\Http\Requests\Accounting\UpdateAccountRequest;
 use App\Models\Account;
 use App\Services\Accounting\ChartOfAccountsService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class AccountController extends TenantController
 {
@@ -52,25 +52,12 @@ class AccountController extends TenantController
     /**
      * A system account's structure is frozen; only its display names may change.
      */
-    public function update(Request $request, Account $account): JsonResponse
+    public function update(UpdateAccountRequest $request, Account $account): JsonResponse
     {
         $this->requireManager();
-        abort_unless($account->organization_id === $this->organizationId(), 404, __('api.record_not_found'));
+        $this->assertOwned($account);
 
-        if ($account->isStructurallyLocked()) {
-            $data = $request->validate([
-                'name' => ['sometimes', 'string', 'min:2', 'max:120'],
-                'name_en' => ['nullable', 'string', 'max:120'],
-            ]);
-        } else {
-            $data = $request->validate([
-                'name' => ['sometimes', 'string', 'min:2', 'max:120'],
-                'name_en' => ['nullable', 'string', 'max:120'],
-                'is_active' => ['sometimes', 'boolean'],
-            ]);
-        }
-
-        $account->update($data);
+        $account->update($request->validated());
 
         return successResponse($account->refresh(), __('api.updated_success'));
     }

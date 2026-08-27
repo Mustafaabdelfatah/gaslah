@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\Tenancy\Payments;
 
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Payments\PayoutConfigRequest;
 use App\Models\PayoutSettlement;
 use App\Services\Payments\PayoutService;
 use Illuminate\Http\JsonResponse;
@@ -37,21 +38,14 @@ class PayoutController extends TenantController
     /**
      * Set the payout schedule and receiving bank account.
      */
-    public function config(Request $request): JsonResponse
+    public function config(PayoutConfigRequest $request): JsonResponse
     {
         $this->requireSuperAdmin();
 
-        $data = $request->validate([
-            'days' => ['nullable', 'array', 'max:2'],
-            'days.*' => ['in:sun,mon,tue,wed,thu,fri,sat'],
-            'bank' => ['nullable', 'array'],
-            'bank.iban' => ['nullable', 'regex:/^SA\d{22}$/'],
-            'bank.bank_name' => ['nullable', 'string', 'max:120'],
-            'bank.beneficiary' => ['nullable', 'string', 'max:200'],
-        ]);
-
         $organization = $this->organization();
-        $organization->update(['payout_config' => array_replace((array) $organization->payout_config, $data)]);
+        $organization->update([
+            'payout_config' => array_replace((array) $organization->payout_config, $request->validated()),
+        ]);
 
         return successResponse($organization->refresh()->payout_config, __('api.updated_success'));
     }

@@ -9,6 +9,7 @@ use App\Exceptions\ModelAlreadyExistsException;
 use App\Http\Middleware\EnsurePublicSignupIsOpen;
 use App\Http\Middleware\LanguageMiddleware;
 use App\Http\Middleware\PlatformPermissionMiddleware;
+use App\Http\Middleware\TenantAccessMiddleware;
 use App\Services\Accounting\AccountingException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -31,6 +32,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'platform.permission' => PlatformPermissionMiddleware::class,
+            'tenant' => TenantAccessMiddleware::class,
             'signup.open' => EnsurePublicSignupIsOpen::class,
         ]);
     })

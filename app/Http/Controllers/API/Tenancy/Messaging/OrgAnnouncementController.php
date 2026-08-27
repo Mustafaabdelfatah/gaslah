@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\API\Tenancy\Messaging;
 
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Messaging\OrgAnnouncementRequest;
 use App\Models\OrgAnnouncement;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 /**
  * Organization announcements shown to customers in the portal. A customer-facing brand
@@ -22,24 +22,24 @@ class OrgAnnouncementController extends TenantController
         );
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(OrgAnnouncementRequest $request): JsonResponse
     {
         $this->requireManager();
 
         $announcement = OrgAnnouncement::query()->create([
-            ...$this->validated($request),
+            ...$request->validated(),
             'organization_id' => $this->organizationId(),
         ]);
 
         return successResponse($announcement, __('api.created_success'), 201);
     }
 
-    public function update(Request $request, OrgAnnouncement $announcement): JsonResponse
+    public function update(OrgAnnouncementRequest $request, OrgAnnouncement $announcement): JsonResponse
     {
         $this->requireManager();
         $this->assertOwned($announcement);
 
-        $announcement->update($this->validated($request, updating: true));
+        $announcement->update($request->validated());
 
         return successResponse($announcement->refresh(), __('api.updated_success'));
     }
@@ -52,20 +52,5 @@ class OrgAnnouncementController extends TenantController
         $announcement->delete();
 
         return successResponse(msg: __('api.deleted_success'));
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function validated(Request $request, bool $updating = false): array
-    {
-        $required = $updating ? 'sometimes' : 'required';
-
-        return $request->validate([
-            'title' => [$required, 'string', 'min:2', 'max:200'],
-            'body' => [$required, 'string', 'max:1000'],
-            'image_url' => ['nullable', 'string', 'regex:#^(https?://|/)#', 'max:500'],
-            'is_active' => ['nullable', 'boolean'],
-        ]);
     }
 }
