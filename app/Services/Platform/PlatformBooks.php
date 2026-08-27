@@ -9,6 +9,7 @@ use App\Models\Account;
 use App\Models\DeviceSale;
 use App\Models\JournalEntry;
 use App\Models\Organization;
+use App\Models\PlatformPartnerDistribution;
 use App\Models\SubscriptionInvoice;
 use App\Services\Accounting\ChartOfAccountsService;
 use App\Services\Accounting\JournalPostingService;
@@ -124,6 +125,53 @@ class PlatformBooks
                 ['account_id' => $vat->getKey(), 'debit' => 0, 'credit' => round((float) $sale->vat, 2)],
             ],
         ]);
+    }
+
+    /**
+     * Post a partner distribution: Dr Partner drawings / Cr Bank. Idempotent per payout.
+     *
+     * A distribution is real cash leaving, so recording the row without the entry would
+     * leave the balance sheet overstating what the platform holds.
+     */
+    public function postPartnerDistribution(PlatformPartnerDistribution $distribution): JournalEntry
+    {
+        $orgId = $this->organization()->getKey();
+
+        $bank = $this->chart->systemAccount($orgId, SystemAccountEnum::Bank);
+        $drawings = $this->partnerDrawingsAccount($orgId);
+        $amount = round((float) $distribution->amount, 2);
+
+        return $this->posting->post([
+            'organization_id' => $orgId,
+            'source' => JournalSourceEnum::Manual,
+            'ref_type' => 'PlatformPartnerDistribution',
+            'ref_id' => $distribution->getKey(),
+            'date' => $distribution->date,
+            'memo' => __('api.partner_distribution_memo', ['partner' => (string) $distribution->partner?->name]),
+            'lines' => [
+                ['account_id' => $drawings->getKey(), 'debit' => $amount, 'credit' => 0],
+                ['account_id' => $bank->getKey(), 'debit' => 0, 'credit' => $amount],
+            ],
+        ]);
+    }
+
+    /**
+     * The partner-drawings account, created on first use. Contra-equity, so it lives in
+     * equity but is debited.
+     */
+    private function partnerDrawingsAccount(int $orgId): Account
+    {
+        return Account::query()->firstOrCreate(
+            ['organization_id' => $orgId, 'system_key' => SystemAccountEnum::PartnerDrawings->value],
+            [
+                'code' => '3030',
+                'name' => 'مسحوبات الشركاء',
+                'name_en' => 'Partner Drawings',
+                'type' => AccountTypeEnum::Equity->value,
+                'is_system' => true,
+                'is_active' => true,
+            ],
+        );
     }
 
     /**

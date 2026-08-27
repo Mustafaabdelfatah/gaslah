@@ -26,6 +26,7 @@ use App\Http\Controllers\API\Platform\AdminDeviceController;
 use App\Http\Controllers\API\Platform\AdminDeviceSaleController;
 use App\Http\Controllers\API\Platform\AdminDunningController;
 use App\Http\Controllers\API\Platform\AdminInvoiceController;
+use App\Http\Controllers\API\Platform\AdminPartnerController;
 use App\Http\Controllers\API\Platform\AdminPayoutController;
 use App\Http\Controllers\API\Platform\AdminPlanController;
 use App\Http\Controllers\API\Platform\AdminSubscriptionController;
@@ -629,6 +630,22 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         Route::post('/', [AdminDeviceSaleController::class, 'store'])->middleware('platform.permission:manage_subscriptions');
         Route::post('{sale}/confirm', [AdminDeviceSaleController::class, 'confirm'])->middleware('platform.permission:manage_accounting');
         Route::delete('{sale}', [AdminDeviceSaleController::class, 'destroy'])->middleware('platform.permission:manage_subscriptions');
+    });
+
+    // Founding partners. Sensitive throughout: ownership and what each is owed are not
+    // for ordinary platform staff, so even reading needs manage_partners. The names-only
+    // picker is the one exception — it carries no money.
+    Route::prefix('partners')->group(function () {
+        Route::get('options', [AdminPartnerController::class, 'options'])
+            ->middleware('platform.permission:manage_partners,manage_accounting');
+
+        Route::middleware('platform.permission:manage_partners')->group(function () {
+            Route::get('/', [AdminPartnerController::class, 'index']);
+            Route::post('/', [AdminPartnerController::class, 'store']);
+            Route::put('{partner}', [AdminPartnerController::class, 'update']);
+            Route::get('{partner}/distributions', [AdminPartnerController::class, 'distributions']);
+            Route::post('{partner}/distributions', [AdminPartnerController::class, 'distribute']);
+        });
     });
 
     // Subscription coupons.

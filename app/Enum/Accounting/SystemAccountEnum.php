@@ -21,6 +21,12 @@ enum SystemAccountEnum: string
     case AccountsPayable = 'ap';
     case Capital = 'capital';
     case RetainedEarnings = 'retained';
+
+    /**
+     * Platform-books only: cash drawn by a founding partner. Contra-equity — it sits in
+     * equity but carries a debit balance, reducing what the owners have left in.
+     */
+    case PartnerDrawings = 'partner_drawings';
     case Sales = 'sales';
     case SalesDiscounts = 'sales_discounts';
 

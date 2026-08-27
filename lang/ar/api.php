@@ -137,6 +137,8 @@ return [
     'asset_has_ledger_footprint' => 'لا يمكن حذف أصل له أثر محاسبي — يجب استبعاده.',
     'subscription_revenue_memo' => 'فاتورة اشتراك: :plan',
     'device_sale_memo' => 'بيع أجهزة: :buyer',
+    'partner_distribution_memo' => 'توزيع أرباح شريك: :partner',
+    'partner_ownership_exceeded' => 'إجمالي ملكية الشركاء النشطين لا يمكن أن يتجاوز :ceiling%.',
     'device_sale_to_platform' => 'لا يمكن إصدار فاتورة أجهزة للمنصة نفسها.',
     'device_sale_buyer_required' => 'مطلوب مشترٍ: إمّا منشأة أو مشترٍ خارجي مُسمّى.',
     'invoice_already_issued' => 'هذه الفاتورة معتمَدة بالفعل.',
