@@ -7,9 +7,11 @@ use App\Filters\Platform\OrganizationScopeFilter;
 use App\Filters\Platform\TenantFilter;
 use App\Http\Controllers\API\BaseController;
 use App\Http\Requests\Global\Other\PageRequest;
+use App\Http\Requests\Platform\StoreOrgAddonRequest;
 use App\Http\Requests\Platform\SuspendTenantRequest;
 use App\Http\Requests\Platform\UpdateEntitlementsRequest;
 use App\Http\Requests\Platform\UpdateTenantProfileRequest;
+use App\Http\Resources\Platform\OrgAddonResource;
 use App\Http\Resources\Platform\PlatformAuditLogResource;
 use App\Http\Resources\Platform\TenantDetailResource;
 use App\Http\Resources\Platform\TenantResource;
@@ -98,6 +100,35 @@ class AdminTenantController extends BaseController
     public function updateEntitlements(UpdateEntitlementsRequest $request, Organization $organization): JsonResponse
     {
         $snapshot = $this->directory->applyEntitlements($organization, $this->admin(), $request->overrides());
+
+        return successResponse($snapshot, __('api.updated_success'));
+    }
+
+    /**
+     * The paid capabilities this tenant holds above its plan.
+     *
+     * Unpaginated by design: an organization holds one row per gated feature at most, and
+     * the catalogue is a couple of dozen keys.
+     */
+    public function addons(Organization $organization): JsonResponse
+    {
+        return successResponse([
+            'addons' => OrgAddonResource::collection($organization->addons()->orderBy('key')->get()),
+            'sellable_keys' => StoreOrgAddonRequest::sellableKeys(),
+        ]);
+    }
+
+    /**
+     * Sell an add-on, or change one the tenant already holds.
+     */
+    public function setAddon(StoreOrgAddonRequest $request, Organization $organization): JsonResponse
+    {
+        $snapshot = $this->directory->setAddon(
+            $organization,
+            $this->admin(),
+            $request->key(),
+            $request->addon(),
+        );
 
         return successResponse($snapshot, __('api.updated_success'));
     }

@@ -51,7 +51,14 @@ class EntitlementService
         if ($subscription !== null) {
             $planKeys = $subscription->plan?->feature_keys ?? [];
             $coreKeys = $catalogue->where('is_core', true)->pluck('key')->all();
-            $enabled = array_values(array_unique([...$coreKeys, ...$planKeys]));
+
+            // Paid add-ons sit on top of the plan: a tenant whose plan excludes delivery
+            // but who bought it separately still has it.
+            //
+            // Only reached while the account is active — the check above has already
+            // returned core-only otherwise, which is what makes a lapsed account lose the
+            // add-ons it is no longer paying for (BRD rule 10).
+            $enabled = array_values(array_unique([...$coreKeys, ...$planKeys, ...$this->addonKeys($organization)]));
         } else {
             $enabled = $catalogue->pluck('key')->all();
         }
@@ -192,6 +199,19 @@ class EntitlementService
      * @param  array<int, string>  $enabled
      * @return array<int, string>
      */
+    /**
+     * Feature keys granted by the organization's live add-ons.
+     *
+     * @return array<int, string>
+     */
+    private function addonKeys(Organization $organization): array
+    {
+        return $organization->addons()
+            ->granting()
+            ->pluck('key')
+            ->all();
+    }
+
     private function applyOverrides(Organization $organization, array $enabled): array
     {
         $overrides = $organization->feature_overrides;

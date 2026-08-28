@@ -138,4 +138,12 @@ class Organization extends BaseModel
     {
         return $this->hasOne(PlatformSubscription::class);
     }
+
+    /**
+     * Paid capabilities held above the plan.
+     */
+    public function addons(): HasMany
+    {
+        return $this->hasMany(OrgAddon::class);
+    }
 }

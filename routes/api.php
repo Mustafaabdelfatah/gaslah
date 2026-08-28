@@ -666,6 +666,11 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         Route::get('{organization}/users', [AdminTenantController::class, 'users']);
         Route::post('{organization}/suspend', [AdminTenantController::class, 'suspend']);
         Route::patch('{organization}/entitlements', [AdminTenantController::class, 'updateEntitlements']);
+
+        // Paid capabilities held above the plan. They only grant anything while the
+        // subscription is live, so a lapsed account loses what it stopped paying for.
+        Route::get('{organization}/addons', [AdminTenantController::class, 'addons']);
+        Route::put('{organization}/addons', [AdminTenantController::class, 'setAddon']);
         Route::put('{organization}/profile', [AdminTenantController::class, 'updateProfile']);
 
         // Archiving takes an account out of circulation. There is no delete: every tenant

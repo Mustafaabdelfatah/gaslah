@@ -5,6 +5,7 @@ namespace App\Services\Platform;
 use App\Enum\Platform\PlatformAuditActionEnum;
 use App\Http\Resources\Platform\PlatformEventResource;
 use App\Http\Resources\Platform\TenantDetailResource;
+use App\Models\OrgAddon;
 use App\Models\Organization;
 use App\Models\PlatformEvent;
 use App\Models\User;
@@ -83,6 +84,36 @@ class TenantDirectoryService
         );
 
         return $organization;
+    }
+
+    /**
+     * Sell a tenant a capability above its plan, or change one it already holds.
+     *
+     * One row per organization and key, so selling the same add-on twice tops up the row
+     * rather than leaving two nothing would reconcile. `activated_at` is stamped on the
+     * first sale and kept afterwards: it is when the tenant started paying for it.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed> the resulting entitlements snapshot
+     */
+    public function setAddon(Organization $organization, User $admin, string $key, array $attributes): array
+    {
+        $addon = OrgAddon::query()->firstOrNew([
+            'organization_id' => $organization->getKey(),
+            'key' => $key,
+        ]);
+
+        $addon->fill($attributes);
+        $addon->activated_at ??= Carbon::now();
+        $addon->save();
+
+        $this->audit->log($admin, PlatformAuditActionEnum::UpdateEntitlements, $organization, [
+            'addon' => $key,
+            'is_active' => $addon->is_active,
+            'expires_at' => $addon->expires_at?->toIso8601String(),
+        ]);
+
+        return $this->entitlements->snapshot($organization->refresh());
     }
 
     /**
