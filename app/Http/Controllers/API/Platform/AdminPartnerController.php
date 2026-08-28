@@ -45,6 +45,7 @@ class AdminPartnerController extends BaseController
                 fn (array $row) => new PlatformPartnerResource($row['partner'], [
                     'share' => $row['share'],
                     'distributed' => $row['distributed'],
+                    'outstanding_reimbursement' => $row['outstanding_reimbursement'],
                     'net_owed' => $row['net_owed'],
                 ]),
             ),

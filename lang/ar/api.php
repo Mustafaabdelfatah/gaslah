@@ -138,6 +138,8 @@ return [
     'subscription_revenue_memo' => 'فاتورة اشتراك: :plan',
     'device_sale_memo' => 'بيع أجهزة: :buyer',
     'partner_distribution_memo' => 'توزيع أرباح شريك: :partner',
+    'expense_not_partner_funded' => 'هذا المصروف غير ممول من شريك، فلا يوجد ما يُسدَّد.',
+    'expense_already_reimbursed' => 'تم سداد هذا المصروف بالفعل.',
     'partner_ownership_exceeded' => 'إجمالي ملكية الشركاء النشطين لا يمكن أن يتجاوز :ceiling%.',
     'device_sale_to_platform' => 'لا يمكن إصدار فاتورة أجهزة للمنصة نفسها.',
     'device_sale_buyer_required' => 'مطلوب مشترٍ: إمّا منشأة أو مشترٍ خارجي مُسمّى.',

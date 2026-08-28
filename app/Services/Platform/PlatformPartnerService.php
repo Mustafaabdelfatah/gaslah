@@ -23,6 +23,7 @@ class PlatformPartnerService
         private readonly PlatformConfigStore $config,
         private readonly PlatformBooks $books,
         private readonly AccountingReportService $reports,
+        private readonly PlatformExpenseService $expenses,
     ) {}
 
     /**
@@ -69,17 +70,21 @@ class PlatformPartnerService
     public function overview(): array
     {
         $netIncome = $this->platformNetIncome();
+        $outstanding = $this->expenses->outstandingByPartner();
         $partners = PlatformPartner::query()->withSum('distributions as distributed', 'amount')->orderBy('name')->get();
 
-        $rows = $partners->map(function (PlatformPartner $partner) use ($netIncome) {
+        $rows = $partners->map(function (PlatformPartner $partner) use ($netIncome, $outstanding) {
             $share = round($partner->effectiveOwnership() / 100 * $netIncome, 2);
             $distributed = round((float) ($partner->distributed ?? 0), 2);
+            $reimbursement = $outstanding[$partner->getKey()] ?? 0.0;
 
             return [
                 'partner' => $partner,
                 'share' => $share,
                 'distributed' => $distributed,
-                'net_owed' => round($share - $distributed, 2),
+                'outstanding_reimbursement' => $reimbursement,
+                // Profit earned plus costs they fronted, less what has already been paid out.
+                'net_owed' => round($share + $reimbursement - $distributed, 2),
             ];
         });
 

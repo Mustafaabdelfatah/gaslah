@@ -25,6 +25,7 @@ use App\Http\Controllers\API\Platform\AdminCouponController;
 use App\Http\Controllers\API\Platform\AdminDeviceController;
 use App\Http\Controllers\API\Platform\AdminDeviceSaleController;
 use App\Http\Controllers\API\Platform\AdminDunningController;
+use App\Http\Controllers\API\Platform\AdminExpenseController;
 use App\Http\Controllers\API\Platform\AdminInvoiceController;
 use App\Http\Controllers\API\Platform\AdminPartnerController;
 use App\Http\Controllers\API\Platform\AdminPayoutController;
@@ -646,6 +647,14 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
             Route::get('{partner}/distributions', [AdminPartnerController::class, 'distributions']);
             Route::post('{partner}/distributions', [AdminPartnerController::class, 'distribute']);
         });
+    });
+
+    // The platform's own operating costs. Recording one posts to the books, so the whole
+    // surface is an accounting act.
+    Route::prefix('expenses')->middleware('platform.permission:manage_accounting')->group(function () {
+        Route::get('/', [AdminExpenseController::class, 'index']);
+        Route::post('/', [AdminExpenseController::class, 'store']);
+        Route::post('{expense}/reimburse', [AdminExpenseController::class, 'reimburse']);
     });
 
     // Subscription coupons.

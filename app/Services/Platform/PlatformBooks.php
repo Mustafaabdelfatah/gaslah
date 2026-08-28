@@ -9,6 +9,7 @@ use App\Models\Account;
 use App\Models\DeviceSale;
 use App\Models\JournalEntry;
 use App\Models\Organization;
+use App\Models\PlatformExpense;
 use App\Models\PlatformPartnerDistribution;
 use App\Models\SubscriptionInvoice;
 use App\Services\Accounting\ChartOfAccountsService;
@@ -151,6 +152,35 @@ class PlatformBooks
             'lines' => [
                 ['account_id' => $drawings->getKey(), 'debit' => $amount, 'credit' => 0],
                 ['account_id' => $bank->getKey(), 'debit' => 0, 'credit' => $amount],
+            ],
+        ]);
+    }
+
+    /**
+     * Post a platform operating cost: Dr Operating expenses / Cr Cash. Idempotent per
+     * expense.
+     *
+     * The full amount is expensed even when a partner fronted it — the platform incurred
+     * the cost either way; who put up the cash is a separate debt, settled on reimbursement.
+     */
+    public function postExpense(PlatformExpense $expense): JournalEntry
+    {
+        $orgId = $this->organization()->getKey();
+
+        $opex = $this->chart->systemAccount($orgId, SystemAccountEnum::OperatingExpenses);
+        $cash = $this->chart->systemAccount($orgId, SystemAccountEnum::Cash);
+        $amount = round((float) $expense->amount, 2);
+
+        return $this->posting->post([
+            'organization_id' => $orgId,
+            'source' => JournalSourceEnum::Expense,
+            'ref_type' => 'PlatformExpense',
+            'ref_id' => $expense->getKey(),
+            'date' => $expense->date,
+            'memo' => __('api.expense_memo', ['category' => (string) $expense->category, 'description' => (string) $expense->note]),
+            'lines' => [
+                ['account_id' => $opex->getKey(), 'debit' => $amount, 'credit' => 0],
+                ['account_id' => $cash->getKey(), 'debit' => 0, 'credit' => $amount],
             ],
         ]);
     }

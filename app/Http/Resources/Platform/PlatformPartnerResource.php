@@ -14,7 +14,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class PlatformPartnerResource extends JsonResource
 {
     /**
-     * @param  array{share: float, distributed: float, net_owed: float}|null  $money
+     * @param  array{share: float, distributed: float, outstanding_reimbursement: float, net_owed: float}|null  $money
      */
     public function __construct($resource, private readonly ?array $money = null)
     {
@@ -38,6 +38,7 @@ class PlatformPartnerResource extends JsonResource
 
             'share' => $this->when($this->money !== null, fn () => $this->money['share']),
             'distributed' => $this->when($this->money !== null, fn () => $this->money['distributed']),
+            'outstanding_reimbursement' => $this->when($this->money !== null, fn () => $this->money['outstanding_reimbursement']),
             'net_owed' => $this->when($this->money !== null, fn () => $this->money['net_owed']),
 
             'created_at' => $this->created_at,
