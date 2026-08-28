@@ -72,6 +72,7 @@ use App\Http\Controllers\API\Tenancy\Reports\BankController;
 use App\Http\Controllers\API\Tenancy\Reports\DashboardController;
 use App\Http\Controllers\API\Tenancy\Reports\ReportController as SalesReportController;
 use App\Http\Controllers\API\Tenancy\Reports\ShiftController;
+use App\Http\Controllers\API\Tenancy\Settings\IntegrationSettingsController;
 use App\Http\Controllers\API\Tenancy\StaffContextController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionPlanController;
@@ -537,6 +538,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('open', [ShiftController::class, 'open']);
         Route::post('close', [ShiftController::class, 'close']);
     });
+
+    // A tenant's third-party credentials. Reading shows which integrations are live;
+    // changing them is the owner's, since a gateway key decides where money goes.
+    Route::get('settings/integrations', [IntegrationSettingsController::class, 'show']);
+    Route::put('settings/integrations', [IntegrationSettingsController::class, 'update'])
+        ->middleware('tenant:super_admin');
 
     // The tenant's own audit trail. Read-only, and the general manager's alone: it shows
     // what every member of the organization did, including each other.

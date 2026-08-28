@@ -69,6 +69,16 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Integration secrets
+    |--------------------------------------------------------------------------
+    | Key for the column-level encryption of tenant integration credentials. Separate
+    | from APP_KEY on purpose: rotating the application key must not make every stored
+    | gateway credential unreadable.
+    */
+    'settings_encryption_key' => env('SETTINGS_ENCRYPTION_KEY', env('APP_KEY')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Platform (Gaslah SaaS operator)
     |--------------------------------------------------------------------------
     */
