@@ -2,6 +2,8 @@
 
 namespace App\Services\Platform;
 
+use App\Enum\Platform\PlatformAnnouncementLevelEnum;
+
 /**
  * The operator's own settings centre.
  *
@@ -37,6 +39,17 @@ class PlatformSettingsService
         'partners' => [
             'key' => 'platform.ownership',
             'defaults' => ['ownershipCeiling' => 100.0],
+        ],
+
+        // Broadcast banners: what a new one defaults to, and how many the tenant's
+        // dashboard shows at once.
+        'announcements' => [
+            'key' => 'platform.announcements',
+            'defaults' => [
+                'defaultLevel' => 'info',
+                'defaultDurationDays' => 14,
+                'tenantNoticeLimit' => 10,
+            ],
         ],
 
         // How support runs: the categories a tenant may file under, how long the operator
@@ -163,6 +176,28 @@ class PlatformSettingsService
     public function ownershipCeiling(): float
     {
         return (float) $this->group('partners')['ownershipCeiling'];
+    }
+
+    /**
+     * What a broadcast banner defaults to, and how many a tenant sees at once.
+     *
+     * @return array{defaultLevel: string, defaultDurationDays: int, tenantNoticeLimit: int}
+     */
+    public function announcements(): array
+    {
+        $announcements = $this->group('announcements');
+
+        $level = (string) $announcements['defaultLevel'];
+
+        return [
+            // A level the operator has since removed falls back rather than writing a
+            // value the column's own CHECK would reject.
+            'defaultLevel' => PlatformAnnouncementLevelEnum::tryFrom($level) === null
+                ? PlatformAnnouncementLevelEnum::Info->value
+                : $level,
+            'defaultDurationDays' => (int) $announcements['defaultDurationDays'],
+            'tenantNoticeLimit' => (int) $announcements['tenantNoticeLimit'],
+        ];
     }
 
     /**

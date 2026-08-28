@@ -48,7 +48,7 @@ class AdminAnnouncementController extends BaseController
         $admin = $request->user();
 
         $announcement = PlatformAnnouncement::create([
-            ...$request->validated(),
+            ...$request->attributesForWrite(),
             'created_by_id' => $admin->getKey(),
         ]);
 
@@ -66,7 +66,7 @@ class AdminAnnouncementController extends BaseController
 
     public function update(PlatformAnnouncementRequest $request, PlatformAnnouncement $announcement): JsonResponse
     {
-        $announcement->update($request->validated());
+        $announcement->update($request->attributesForWrite());
 
         return successResponse(new PlatformAnnouncementResource($announcement->refresh()), __('api.updated_success'));
     }

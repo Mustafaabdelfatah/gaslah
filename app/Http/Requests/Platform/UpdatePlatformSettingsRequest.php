@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Platform;
 
+use App\Enum\Platform\PlatformAnnouncementLevelEnum;
 use App\Http\Requests\BaseFormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * A card of the operator's settings centre.
@@ -27,6 +29,14 @@ class UpdatePlatformSettingsRequest extends BaseFormRequest
                 // Below 100% the platform holds some of itself back; above it would let
                 // more be owned than exists.
                 'ownershipCeiling' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            ],
+
+            'announcements' => [
+                'defaultLevel' => ['nullable', Rule::in(PlatformAnnouncementLevelEnum::values())],
+                // How long a banner runs when the operator does not set an end date.
+                'defaultDurationDays' => ['nullable', 'integer', 'min:1', 'max:365'],
+                // How many banners a tenant's dashboard shows at once.
+                'tenantNoticeLimit' => ['nullable', 'integer', 'min:1', 'max:50'],
             ],
 
             'support' => [
