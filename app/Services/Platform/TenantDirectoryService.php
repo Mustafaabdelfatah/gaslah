@@ -86,6 +86,24 @@ class TenantDirectoryService
     }
 
     /**
+     * Correct a tenant's commercial details on its behalf.
+     *
+     * The operator can do this because a wrong VAT number on issued invoices is their
+     * problem too, but it is someone else's business being edited — so it leaves a trail
+     * naming who changed what.
+     *
+     * @param  array<string, mixed>  $profile
+     */
+    public function updateProfile(Organization $organization, User $admin, array $profile): Organization
+    {
+        $organization->forceFill($profile)->save();
+
+        $this->audit->log($admin, PlatformAuditActionEnum::UpdateProfile, $organization, $profile);
+
+        return $organization->refresh();
+    }
+
+    /**
      * Apply the operator's entitlement overrides. Only the supplied keys are written.
      *
      * @param  array<string, mixed>  $overrides

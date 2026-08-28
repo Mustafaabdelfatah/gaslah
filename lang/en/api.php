@@ -354,4 +354,8 @@ return [
         'ldap' => 'LDAP',
         'reverb' => 'Instant Notifications',
     ],
+
+    'tenant_already_archived' => 'This account is already archived.',
+    'tenant_not_archived' => 'This account is not archived.',
+    'export_truncated' => 'This export carries the first :cap customers of :total. The remainder was not included.',
 ];

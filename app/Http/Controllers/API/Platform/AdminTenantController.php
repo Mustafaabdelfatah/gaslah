@@ -9,7 +9,9 @@ use App\Http\Controllers\API\BaseController;
 use App\Http\Requests\Global\Other\PageRequest;
 use App\Http\Requests\Platform\SuspendTenantRequest;
 use App\Http\Requests\Platform\UpdateEntitlementsRequest;
+use App\Http\Requests\Platform\UpdateTenantProfileRequest;
 use App\Http\Resources\Platform\PlatformAuditLogResource;
+use App\Http\Resources\Platform\TenantDetailResource;
 use App\Http\Resources\Platform\TenantResource;
 use App\Http\Resources\Platform\TenantUserResource;
 use App\Models\Organization;
@@ -84,6 +86,13 @@ class AdminTenantController extends BaseController
         );
 
         return successResponse(['is_suspended' => $organization->is_suspended], __('api.updated_success'));
+    }
+
+    public function updateProfile(UpdateTenantProfileRequest $request, Organization $organization): JsonResponse
+    {
+        $organization = $this->directory->updateProfile($organization, $this->admin(), $request->profile());
+
+        return successResponse(new TenantDetailResource($organization), __('api.updated_success'));
     }
 
     public function updateEntitlements(UpdateEntitlementsRequest $request, Organization $organization): JsonResponse

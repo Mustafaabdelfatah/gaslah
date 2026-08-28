@@ -24,6 +24,7 @@ use App\Http\Controllers\API\Market\SupplierPortalController;
 use App\Http\Controllers\API\Messaging\WaWebhookController;
 use App\Http\Controllers\API\Payments\PayController;
 use App\Http\Controllers\API\Platform\AdminAnnouncementController;
+use App\Http\Controllers\API\Platform\AdminConfigController;
 use App\Http\Controllers\API\Platform\AdminCouponController;
 use App\Http\Controllers\API\Platform\AdminDeviceController;
 use App\Http\Controllers\API\Platform\AdminDeviceSaleController;
@@ -36,6 +37,7 @@ use App\Http\Controllers\API\Platform\AdminPayoutController;
 use App\Http\Controllers\API\Platform\AdminPlanController;
 use App\Http\Controllers\API\Platform\AdminSubscriptionController;
 use App\Http\Controllers\API\Platform\AdminTenantController;
+use App\Http\Controllers\API\Platform\AdminTenantDataController;
 use App\Http\Controllers\API\Platform\PlatformStatsController;
 use App\Http\Controllers\API\Portal\PortalAuthController;
 use App\Http\Controllers\API\Portal\PortalController;
@@ -645,6 +647,33 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         Route::get('{organization}/users', [AdminTenantController::class, 'users']);
         Route::post('{organization}/suspend', [AdminTenantController::class, 'suspend']);
         Route::patch('{organization}/entitlements', [AdminTenantController::class, 'updateEntitlements']);
+        Route::put('{organization}/profile', [AdminTenantController::class, 'updateProfile']);
+
+        // Archiving takes an account out of circulation. There is no delete: every tenant
+        // shares one database, and a cascade from an organization row would take orders,
+        // invoices and accounting entries with it.
+        Route::post('{organization}/archive', [AdminTenantDataController::class, 'archive']);
+        Route::post('{organization}/unarchive', [AdminTenantDataController::class, 'unarchive']);
+    });
+
+    // Handing a tenant its own data back means handing over the personal details of every
+    // customer it serves — the owner's call alone, never a delegated permission.
+    Route::get('tenants/{organization}/export', [AdminTenantDataController::class, 'export'])
+        ->middleware('platform.permission:owner');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — The operator's settings centre
+    |--------------------------------------------------------------------------
+    |
+    | Owner-only throughout, reads included: these decide who the platform is on the
+    | invoices it issues and how much of itself it may sell. Holding `manage_config` is
+    | not enough.
+    */
+    Route::prefix('config')->middleware('platform.permission:owner')->group(function () {
+        Route::get('/', [AdminConfigController::class, 'index']);
+        Route::get('{group}', [AdminConfigController::class, 'show']);
+        Route::put('{group}', [AdminConfigController::class, 'update']);
     });
 
     Route::prefix('tenants/{organization}')->middleware('platform.permission:manage_subscriptions')->group(function () {

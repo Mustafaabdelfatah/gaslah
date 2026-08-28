@@ -30,7 +30,7 @@ class PlatformInvoiceChain
      */
     private const MAX_ATTEMPTS = 8;
 
-    public function __construct(private readonly PlatformConfigStore $config) {}
+    public function __construct(private readonly PlatformSettingsService $settings) {}
 
     /**
      * Claim the next slot for a draft and freeze it as issued.
@@ -118,13 +118,7 @@ class PlatformInvoiceChain
      */
     public function seller(): array
     {
-        $platform = $this->config->get('platform', []);
-        $platform = is_array($platform) ? $platform : [];
-
-        return [
-            'name' => (string) ($platform['sellerName'] ?? config('app.name', 'Gaslah')),
-            'vat' => $platform['sellerVat'] ?? config('services.platform.seller_vat'),
-        ];
+        return $this->settings->seller();
     }
 
     private function qr(Model $invoice, string $timestamp, string $hash): string

@@ -355,4 +355,8 @@ return [
         'ldap' => 'LDAP',
         'reverb' => 'الاشعارات اللحظية',
     ],
+
+    'tenant_already_archived' => 'هذا الحساب مؤرشف بالفعل.',
+    'tenant_not_archived' => 'هذا الحساب غير مؤرشف.',
+    'export_truncated' => 'يحتوي هذا التصدير على أول :cap عميل من أصل :total، ولم يُضمَّن الباقي.',
 ];

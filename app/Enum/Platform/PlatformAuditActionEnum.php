@@ -14,6 +14,7 @@ enum PlatformAuditActionEnum: string
     case Suspend = 'suspend';
     case Reactivate = 'reactivate';
     case UpdateEntitlements = 'update_entitlements';
+    case UpdateProfile = 'update_profile';
     case UpdateSubscription = 'update_subscription';
     case StartTrial = 'start_trial';
     case Extend = 'extend';

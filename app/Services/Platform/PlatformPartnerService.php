@@ -15,12 +15,8 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class PlatformPartnerService
 {
-    private const CEILING_KEY = 'platform.ownershipCeiling';
-
-    private const DEFAULT_CEILING = 100.0;
-
     public function __construct(
-        private readonly PlatformConfigStore $config,
+        private readonly PlatformSettingsService $settings,
         private readonly PlatformBooks $books,
         private readonly AccountingReportService $reports,
         private readonly PlatformExpenseService $expenses,
@@ -156,7 +152,7 @@ class PlatformPartnerService
 
     private function ceiling(): float
     {
-        return (float) ($this->config->get(self::CEILING_KEY) ?? self::DEFAULT_CEILING);
+        return $this->settings->ownershipCeiling();
     }
 
     /**

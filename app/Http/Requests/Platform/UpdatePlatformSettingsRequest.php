@@ -1,0 +1,48 @@
+<?php
+
+namespace App\Http\Requests\Platform;
+
+use App\Http\Requests\BaseFormRequest;
+
+/**
+ * A card of the operator's settings centre.
+ *
+ * Each group has its own fields, so the rules are chosen by the group in the path. Every
+ * field is optional: the centre saves one card at a time and an absent key means "leave it
+ * alone". An unknown group never reaches here — the controller answers 404 first.
+ */
+class UpdatePlatformSettingsRequest extends BaseFormRequest
+{
+    public function rules(): array
+    {
+        return match ($this->route('group')) {
+            'invoicing' => [
+                // The platform's legal name and VAT number: they reach the ZATCA QR on
+                // every invoice it issues, so shape matters.
+                'sellerName' => ['nullable', 'string', 'max:200'],
+                'sellerVat' => ['nullable', 'string', 'regex:/^3\d{13}3$/'],
+            ],
+
+            'partners' => [
+                // Below 100% the platform holds some of itself back; above it would let
+                // more be owned than exists.
+                'ownershipCeiling' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            ],
+
+            default => [],
+        };
+    }
+
+    /**
+     * Only the keys actually sent, so a card that omits a field leaves it as it stands
+     * rather than clearing it.
+     *
+     * @return array<string, mixed>
+     */
+    public function values(): array
+    {
+        // validated() carries only the group's own declared fields, and only the ones the
+        // request actually sent — which is exactly the merge the service wants.
+        return $this->validated();
+    }
+}
