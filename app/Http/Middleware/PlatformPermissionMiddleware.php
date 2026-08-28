@@ -18,9 +18,20 @@ use Symfony\Component\HttpFoundation\Response;
  *
  *     ->middleware('platform.permission:manage_plans')
  *     ->middleware('platform.permission:manage_plans,view_finance')
+ *
+ * The reserved word `owner` requires the owner role itself rather than a permission. Some
+ * acts — acting as somebody else, rewriting the platform's own configuration — should not
+ * be reachable by any combination of granted permissions.
+ *
+ *     ->middleware('platform.permission:owner')
  */
 class PlatformPermissionMiddleware
 {
+    /**
+     * Not a permission: the owner role itself.
+     */
+    private const OWNER = 'owner';
+
     public function __construct(private readonly PlatformAccessService $platform) {}
 
     public function handle(Request $request, Closure $next, string ...$permissions): Response
@@ -35,7 +46,11 @@ class PlatformPermissionMiddleware
         }
 
         foreach ($permissions as $permission) {
-            if ($this->platform->has($user, $permission)) {
+            $granted = $permission === self::OWNER
+                ? $this->platform->isOwner($user)
+                : $this->platform->has($user, $permission);
+
+            if ($granted) {
                 return $next($request);
             }
         }

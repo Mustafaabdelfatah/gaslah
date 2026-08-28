@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\API\Tenancy\Payments;
 
 use App\Http\Controllers\API\Tenancy\TenantController;
+use App\Http\Requests\Global\Other\PageRequest;
 use App\Http\Requests\Payments\PayoutConfigRequest;
+use App\Http\Resources\Payments\PayoutSettlementSummaryResource;
 use App\Models\PayoutSettlement;
 use App\Services\Payments\PayoutService;
 use Illuminate\Http\JsonResponse;
@@ -26,12 +28,20 @@ class PayoutController extends TenantController
         return successResponse([
             'balance' => $this->payouts->unsettledSummary($this->organizationId()),
             'config' => $this->organization()->payout_config ?? [],
-            'history' => PayoutSettlement::query()
-                ->where('organization_id', $this->organizationId())
-                ->latest('id')
-                ->limit(100)
-                ->get(['id', 'status', 'urgent', 'gross_amount', 'fee_amount', 'net_amount', 'transfer_ref', 'created_at', 'sent_at']),
         ]);
+    }
+
+    /**
+     * Past payout batches. Its own endpoint rather than a slice bolted onto the summary:
+     * the history grows without limit, and a tenant looking back a year should be able to.
+     */
+    public function history(PageRequest $request): JsonResponse
+    {
+        $query = PayoutSettlement::query()
+            ->where('organization_id', $this->organizationId())
+            ->latest('id');
+
+        return successResponse(wrapPaginate($query, PayoutSettlementSummaryResource::class));
     }
 
     /**

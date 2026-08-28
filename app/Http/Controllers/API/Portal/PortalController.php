@@ -4,13 +4,15 @@ namespace App\Http\Controllers\API\Portal;
 
 use App\Http\Requests\Global\Other\PageRequest;
 use App\Http\Requests\Portal\StoreCustomerAddressRequest;
+use App\Http\Resources\Portal\CustomerAddressResource;
+use App\Http\Resources\Portal\PortalAnnouncementResource;
 use App\Http\Resources\Portal\PortalOrderResource;
 use App\Models\CustomerAddress;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrgAnnouncement;
+use App\Services\Portal\CustomerAddressService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
 
 /**
  * The customer portal: profile and wallet (read-only), orders, order detail, and
@@ -19,7 +21,10 @@ use Illuminate\Support\Facades\DB;
  */
 class PortalController extends PortalBaseController
 {
-    private const MAX_ORDERS = 50;
+    public function __construct(private readonly CustomerAddressService $addresses)
+    {
+        parent::__construct();
+    }
 
     public function me(): JsonResponse
     {
@@ -92,34 +97,16 @@ class PortalController extends PortalBaseController
             ->latest('id')
             ->get(['id', 'label', 'district', 'street', 'details', 'is_default']);
 
-        return successResponse($addresses);
+        return successResponse(CustomerAddressResource::collection($addresses));
     }
 
     public function storeAddress(StoreCustomerAddressRequest $request): JsonResponse
     {
         $customer = $this->customer();
 
-        $data = $request->validated();
-        $makeDefault = $request->shouldBecomeDefault();
+        $address = $this->addresses->store($customer, $request->validated(), $request->shouldBecomeDefault());
 
-        // Setting a default must clear the others in the same transaction, so we never
-        // end with two defaults or none.
-        $address = DB::transaction(function () use ($customer, $data, $makeDefault) {
-            if ($makeDefault) {
-                CustomerAddress::query()->where('customer_id', $customer->getKey())->update(['is_default' => false]);
-            }
-
-            return CustomerAddress::query()->create([
-                'customer_id' => $customer->getKey(),
-                'label' => $data['label'],
-                'district' => $data['district'] ?? null,
-                'street' => $data['street'] ?? null,
-                'details' => $data['details'] ?? null,
-                'is_default' => $makeDefault,
-            ]);
-        });
-
-        return successResponse($address, __('api.created_success'), 201);
+        return successResponse(new CustomerAddressResource($address), __('api.created_success'), 201);
     }
 
     /**
@@ -127,14 +114,12 @@ class PortalController extends PortalBaseController
      */
     public function announcements(): JsonResponse
     {
-        $announcements = OrgAnnouncement::query()
+        $query = OrgAnnouncement::query()
             ->forOrganization($this->customer()->organization_id)
             ->where('is_active', true)
-            ->latest('id')
-            ->limit(20)
-            ->get(['id', 'title', 'body', 'image_url']);
+            ->latest('id');
 
-        return successResponse($announcements);
+        return successResponse(wrapPaginate($query, PortalAnnouncementResource::class));
     }
 
     public function destroyAddress(int $id): JsonResponse

@@ -7,6 +7,7 @@ use App\Http\Requests\Global\Other\PageRequest;
 use App\Http\Requests\Platform\PlatformPartnerRequest;
 use App\Http\Requests\Platform\StoreDistributionRequest;
 use App\Http\Resources\Platform\PartnerDistributionResource;
+use App\Http\Resources\Platform\PartnerOptionResource;
 use App\Http\Resources\Platform\PlatformPartnerResource;
 use App\Models\PlatformPartner;
 use App\Models\PlatformPartnerDistribution;
@@ -59,7 +60,7 @@ class AdminPartnerController extends BaseController
     {
         $partners = PlatformPartner::query()->active()->orderBy('name')->get(['id', 'name']);
 
-        return successResponse($partners->map(fn (PlatformPartner $partner) => $partner->only('id', 'name')));
+        return successResponse(PartnerOptionResource::collection($partners));
     }
 
     public function store(PlatformPartnerRequest $request): JsonResponse

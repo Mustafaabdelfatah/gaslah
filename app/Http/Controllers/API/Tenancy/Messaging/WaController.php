@@ -37,9 +37,9 @@ class WaController extends TenantController
                 'org_used' => $this->wa->monthUsed($organizationId, null),
             ],
             'stats' => [
-                'by_status' => $this->countBy('status'),
-                'by_category' => $this->countBy('category'),
-                'by_event' => $this->countBy('event_key'),
+                'by_status' => $this->wa->monthlyCountsBy($this->organizationId(), 'status'),
+                'by_category' => $this->wa->monthlyCountsBy($this->organizationId(), 'category'),
+                'by_event' => $this->wa->monthlyCountsBy($this->organizationId(), 'event_key'),
             ],
         ]);
     }
@@ -139,18 +139,4 @@ class WaController extends TenantController
     |--------------------------------------------------------------------------
     */
 
-    /**
-     * @return array<int, array{key: string, count: int}>
-     */
-    private function countBy(string $column): array
-    {
-        return WaMessage::query()
-            ->where('organization_id', $this->organizationId())
-            ->where('created_at', '>=', now()->startOfMonth())
-            ->selectRaw("{$column} as k, COUNT(*) as c")
-            ->groupBy($column)
-            ->get()
-            ->map(fn ($r) => ['key' => $r->k instanceof \BackedEnum ? $r->k->value : $r->k, 'count' => (int) $r->c])
-            ->all();
-    }
 }

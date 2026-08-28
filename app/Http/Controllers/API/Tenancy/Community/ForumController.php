@@ -6,6 +6,7 @@ use App\Enum\Forum\ForumStatusEnum;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Community\StoreForumPostRequest;
 use App\Http\Requests\Community\StoreForumThreadRequest;
+use App\Http\Resources\Community\ForumThreadResource;
 use App\Models\ForumCategory;
 use App\Models\ForumPost;
 use App\Models\ForumThread;
@@ -32,16 +33,14 @@ class ForumController extends TenantController
     {
         $this->staff();
 
-        $threads = ForumThread::query()
+        $query = ForumThread::query()
             ->where('status', ForumStatusEnum::Approved->value)
             ->when($request->filled('category'), fn ($q) => $q->whereHas('category', fn ($c) => $c->where('slug', $request->input('category'))))
             ->with(['author:id,name', 'category:id,name,slug'])
             ->orderByDesc('is_pinned')
-            ->orderByDesc('last_activity_at')
-            ->limit(100)
-            ->get();
+            ->orderByDesc('last_activity_at');
 
-        return successResponse($threads);
+        return successResponse(wrapPaginate($query, ForumThreadResource::class));
     }
 
     public function show(ForumThread $thread): JsonResponse

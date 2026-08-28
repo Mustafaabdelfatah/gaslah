@@ -61,6 +61,30 @@ class DeviceSale extends BaseModel
         return $query->where('status', SubscriptionInvoiceStatusEnum::Issued->value);
     }
 
+    /**
+     * The recognised revenue across issued sales — drafts are not revenue, so they are
+     * excluded here rather than at each call site.
+     *
+     * @return array{issued_count: int, revenue: float, vat: float, total: float}
+     */
+    public static function recognisedTotals(): array
+    {
+        $totals = static::query()
+            ->issued()
+            ->selectRaw('COUNT(*) as issued_count')
+            ->selectRaw('COALESCE(SUM(subtotal), 0) as revenue')
+            ->selectRaw('COALESCE(SUM(vat), 0) as vat')
+            ->selectRaw('COALESCE(SUM(total), 0) as total')
+            ->first();
+
+        return [
+            'issued_count' => (int) $totals->issued_count,
+            'revenue' => round((float) $totals->revenue, 2),
+            'vat' => round((float) $totals->vat, 2),
+            'total' => round((float) $totals->total, 2),
+        ];
+    }
+
     public function isDraft(): bool
     {
         return $this->status === SubscriptionInvoiceStatusEnum::Draft;

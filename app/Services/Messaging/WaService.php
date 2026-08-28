@@ -11,6 +11,7 @@ use App\Models\WaMessage;
 use App\Models\WaTemplate;
 use App\Services\Messaging\Providers\MessagingProvider;
 use App\Services\Messaging\Providers\WhatsAppProvider;
+use BackedEnum;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -274,6 +275,26 @@ class WaService
         }
 
         return $message;
+    }
+
+    /**
+     * This month's message counts grouped by one column, for the overview screen.
+     *
+     * @return array<int, array{key: string, count: int}>
+     */
+    public function monthlyCountsBy(int $organizationId, string $column): array
+    {
+        return WaMessage::query()
+            ->where('organization_id', $organizationId)
+            ->where('created_at', '>=', Carbon::now()->startOfMonth())
+            ->selectRaw("{$column} as k, COUNT(*) as c")
+            ->groupBy($column)
+            ->get()
+            ->map(fn ($row) => [
+                'key' => $row->k instanceof BackedEnum ? $row->k->value : $row->k,
+                'count' => (int) $row->c,
+            ])
+            ->all();
     }
 
     /**

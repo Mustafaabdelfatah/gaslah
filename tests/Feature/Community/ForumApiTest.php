@@ -38,7 +38,7 @@ class ForumApiTest extends TestCase
             ->assertJsonPath('data.status', 'pending');
 
         // Pending threads are not in the public list.
-        $this->getJson('/api/forum/threads')->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson('/api/forum/threads')->assertOk()->assertJsonPath('data.total', 0);
     }
 
     public function test_the_pending_queue_is_capped(): void

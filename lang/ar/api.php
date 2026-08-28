@@ -140,6 +140,8 @@ return [
     'partner_distribution_memo' => 'توزيع أرباح شريك: :partner',
     'expense_not_partner_funded' => 'هذا المصروف غير ممول من شريك، فلا يوجد ما يُسدَّد.',
     'expense_already_reimbursed' => 'تم سداد هذا المصروف بالفعل.',
+    'impersonation_no_target' => 'لا يوجد موظف نشط في هذه المنشأة للدخول باسمه.',
+    'impersonation_stopped' => 'تم إنهاء جلسات الانتحال.',
     'partner_ownership_exceeded' => 'إجمالي ملكية الشركاء النشطين لا يمكن أن يتجاوز :ceiling%.',
     'device_sale_to_platform' => 'لا يمكن إصدار فاتورة أجهزة للمنصة نفسها.',
     'device_sale_buyer_required' => 'مطلوب مشترٍ: إمّا منشأة أو مشترٍ خارجي مُسمّى.',

@@ -140,6 +140,8 @@ return [
     'partner_distribution_memo' => 'Partner distribution: :partner',
     'expense_not_partner_funded' => 'This expense was not funded by a partner, so there is nothing to reimburse.',
     'expense_already_reimbursed' => 'This expense has already been reimbursed.',
+    'impersonation_no_target' => 'This organization has no active staff member to enter as.',
+    'impersonation_stopped' => 'Impersonated sessions ended.',
     'partner_ownership_exceeded' => 'Total active partner ownership cannot exceed :ceiling%.',
     'device_sale_to_platform' => 'The platform cannot be invoiced for its own devices.',
     'device_sale_buyer_required' => 'A buyer is required: either an organization or a named external buyer.',

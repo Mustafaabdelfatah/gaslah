@@ -26,6 +26,7 @@ use App\Http\Controllers\API\Platform\AdminDeviceController;
 use App\Http\Controllers\API\Platform\AdminDeviceSaleController;
 use App\Http\Controllers\API\Platform\AdminDunningController;
 use App\Http\Controllers\API\Platform\AdminExpenseController;
+use App\Http\Controllers\API\Platform\AdminImpersonationController;
 use App\Http\Controllers\API\Platform\AdminInvoiceController;
 use App\Http\Controllers\API\Platform\AdminPartnerController;
 use App\Http\Controllers\API\Platform\AdminPayoutController;
@@ -417,6 +418,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     */
     Route::prefix('payouts')->middleware('tenant:manager')->group(function () {
         Route::get('/', [PayoutController::class, 'index']);
+        Route::get('history', [PayoutController::class, 'history']);
         Route::post('request', [PayoutController::class, 'request']);
 
         // The receiving bank account is where the tenant's money lands, so only the owner
@@ -655,6 +657,13 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         Route::get('/', [AdminExpenseController::class, 'index']);
         Route::post('/', [AdminExpenseController::class, 'store']);
         Route::post('{expense}/reimburse', [AdminExpenseController::class, 'reimburse']);
+    });
+
+    // Impersonation — the owner's alone: no combination of granted permissions should add
+    // up to "may act as somebody else".
+    Route::middleware('platform.permission:owner')->group(function () {
+        Route::post('tenants/{organization}/impersonate', [AdminImpersonationController::class, 'start']);
+        Route::post('impersonate/stop', [AdminImpersonationController::class, 'stop']);
     });
 
     // Subscription coupons.

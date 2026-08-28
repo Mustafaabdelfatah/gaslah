@@ -38,7 +38,7 @@ class AdminDeviceSaleController extends BaseController
         return successResponse(wrapPaginate(
             $query,
             DeviceSaleResource::class,
-            ['totals' => $this->recognisedTotals()],
+            ['totals' => DeviceSale::recognisedTotals()],
         ));
     }
 
@@ -82,28 +82,5 @@ class AdminDeviceSaleController extends BaseController
         $sale->delete();
 
         return successResponse(null, __('api.deleted_success'));
-    }
-
-    /**
-     * Issued sales only — a draft is not revenue.
-     *
-     * @return array{issued_count: int, revenue: float, vat: float, total: float}
-     */
-    private function recognisedTotals(): array
-    {
-        $totals = DeviceSale::query()
-            ->issued()
-            ->selectRaw('COUNT(*) as issued_count')
-            ->selectRaw('COALESCE(SUM(subtotal), 0) as revenue')
-            ->selectRaw('COALESCE(SUM(vat), 0) as vat')
-            ->selectRaw('COALESCE(SUM(total), 0) as total')
-            ->first();
-
-        return [
-            'issued_count' => (int) $totals->issued_count,
-            'revenue' => round((float) $totals->revenue, 2),
-            'vat' => round((float) $totals->vat, 2),
-            'total' => round((float) $totals->total, 2),
-        ];
     }
 }

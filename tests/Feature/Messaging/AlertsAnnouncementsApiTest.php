@@ -85,8 +85,8 @@ class AlertsAnnouncementsApiTest extends TestCase
         Sanctum::actingAs($this->customer);
         $this->getJson('/api/portal/announcements')
             ->assertOk()
-            ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.title', 'Eid Offer');
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.title', 'Eid Offer');
     }
 
     private function order(array $attributes): Order
