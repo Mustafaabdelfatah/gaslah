@@ -26,12 +26,14 @@ use App\Http\Controllers\API\Payments\PayController;
 use App\Http\Controllers\API\Platform\AdminAnnouncementController;
 use App\Http\Controllers\API\Platform\AdminConfigController;
 use App\Http\Controllers\API\Platform\AdminCouponController;
+use App\Http\Controllers\API\Platform\AdminCrmController;
 use App\Http\Controllers\API\Platform\AdminDeviceController;
 use App\Http\Controllers\API\Platform\AdminDeviceSaleController;
 use App\Http\Controllers\API\Platform\AdminDunningController;
 use App\Http\Controllers\API\Platform\AdminExpenseController;
 use App\Http\Controllers\API\Platform\AdminImpersonationController;
 use App\Http\Controllers\API\Platform\AdminInvoiceController;
+use App\Http\Controllers\API\Platform\AdminLeadController;
 use App\Http\Controllers\API\Platform\AdminPartnerController;
 use App\Http\Controllers\API\Platform\AdminPayoutController;
 use App\Http\Controllers\API\Platform\AdminPlanController;
@@ -677,6 +679,37 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     // customer it serves — the owner's call alone, never a delegated permission.
     Route::get('tenants/{organization}/export', [AdminTenantDataController::class, 'export'])
         ->middleware('platform.permission:owner');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — CRM: the follow-up desk
+    |--------------------------------------------------------------------------
+    |
+    | Which tenants need chasing, and the notes kept against them.
+    */
+    Route::prefix('crm')->middleware('platform.permission:manage_crm')->group(function () {
+        Route::get('/', [AdminCrmController::class, 'index']);
+        Route::get('notes', [AdminCrmController::class, 'notes']);
+        Route::post('notes', [AdminCrmController::class, 'storeNote']);
+        Route::post('notes/{note}/done', [AdminCrmController::class, 'completeNote']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — Leads: the sales pipeline
+    |--------------------------------------------------------------------------
+    |
+    | Converting a lead provisions a real tenant and an owner account for it, so it is
+    | gated the same as the rest of the pipeline rather than left to signup's own rules.
+    */
+    Route::prefix('leads')->middleware('platform.permission:manage_leads')->group(function () {
+        Route::get('/', [AdminLeadController::class, 'index']);
+        Route::post('/', [AdminLeadController::class, 'store']);
+        Route::get('{lead}', [AdminLeadController::class, 'show']);
+        Route::put('{lead}', [AdminLeadController::class, 'update']);
+        Route::post('{lead}/notes', [AdminLeadController::class, 'storeNote']);
+        Route::post('{lead}/convert', [AdminLeadController::class, 'convert']);
+    });
 
     /*
     |--------------------------------------------------------------------------

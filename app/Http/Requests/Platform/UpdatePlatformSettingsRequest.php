@@ -39,6 +39,10 @@ class UpdatePlatformSettingsRequest extends BaseFormRequest
                 'tenantNoticeLimit' => ['nullable', 'integer', 'min:1', 'max:50'],
             ],
 
+            'marketing' => [
+                'defaultLeadSource' => ['nullable', 'string', 'max:60'],
+            ],
+
             'support' => [
                 // The list a tenant picks from when filing a ticket.
                 'categories' => ['nullable', 'array', 'max:40'],

@@ -32,4 +32,18 @@ enum PlatformSubscriptionStatusEnum: string
     {
         return array_column(self::cases(), 'value');
     }
+
+    /**
+     * The statuses that still permit writes, for queries that need the set rather than
+     * one case at a time.
+     *
+     * @return array<int, string>
+     */
+    public static function writableValues(): array
+    {
+        return array_values(array_map(
+            static fn (self $case): string => $case->value,
+            array_filter(self::cases(), static fn (self $case): bool => $case->isWritable()),
+        ));
+    }
 }

@@ -52,6 +52,12 @@ class PlatformSettingsService
             ],
         ],
 
+        // Where a lead entered by hand is assumed to have come from.
+        'marketing' => [
+            'key' => 'platform.marketing',
+            'defaults' => ['defaultLeadSource' => 'manual'],
+        ],
+
         // How support runs: the categories a tenant may file under, how long the operator
         // may leave a ticket unanswered before it counts as breached, and the automatic
         // acknowledgement a new ticket gets.
@@ -198,6 +204,18 @@ class PlatformSettingsService
             'defaultDurationDays' => (int) $announcements['defaultDurationDays'],
             'tenantNoticeLimit' => (int) $announcements['tenantNoticeLimit'],
         ];
+    }
+
+    /**
+     * Where a lead entered by hand is assumed to have come from.
+     *
+     * @return array{defaultLeadSource: string}
+     */
+    public function marketing(): array
+    {
+        $source = trim((string) $this->group('marketing')['defaultLeadSource']);
+
+        return ['defaultLeadSource' => $source === '' ? 'manual' : $source];
     }
 
     /**

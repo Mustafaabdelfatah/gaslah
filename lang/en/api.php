@@ -358,4 +358,7 @@ return [
     'tenant_already_archived' => 'This account is already archived.',
     'tenant_not_archived' => 'This account is not archived.',
     'export_truncated' => 'This export carries the first :cap customers of :total. The remainder was not included.',
+
+    'lead_already_converted' => 'This lead has already been converted into an account.',
+    'crm_note_not_a_task' => 'Only a task can be marked done.',
 ];

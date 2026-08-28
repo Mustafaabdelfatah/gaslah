@@ -359,4 +359,7 @@ return [
     'tenant_already_archived' => 'هذا الحساب مؤرشف بالفعل.',
     'tenant_not_archived' => 'هذا الحساب غير مؤرشف.',
     'export_truncated' => 'يحتوي هذا التصدير على أول :cap عميل من أصل :total، ولم يُضمَّن الباقي.',
+
+    'lead_already_converted' => 'تم تحويل هذا العميل المحتمل إلى حساب بالفعل.',
+    'crm_note_not_a_task' => 'لا يمكن وسم غير المهام كمنجَزة.',
 ];
