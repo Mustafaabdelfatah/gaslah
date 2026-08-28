@@ -29,6 +29,18 @@ class UpdatePlatformSettingsRequest extends BaseFormRequest
                 'ownershipCeiling' => ['nullable', 'numeric', 'min:0', 'max:100'],
             ],
 
+            'support' => [
+                // The list a tenant picks from when filing a ticket.
+                'categories' => ['nullable', 'array', 'max:40'],
+                'categories.*' => ['required', 'string', 'max:60'],
+
+                // How long a ticket may sit unanswered before the inbox flags it.
+                'slaResponseMinutes' => ['nullable', 'integer', 'min:1', 'max:10080'],
+
+                'autoReplyEnabled' => ['nullable', 'boolean'],
+                'autoReplyText' => ['nullable', 'string', 'max:1000'],
+            ],
+
             default => [],
         };
     }

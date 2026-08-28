@@ -36,6 +36,7 @@ use App\Http\Controllers\API\Platform\AdminPartnerController;
 use App\Http\Controllers\API\Platform\AdminPayoutController;
 use App\Http\Controllers\API\Platform\AdminPlanController;
 use App\Http\Controllers\API\Platform\AdminSubscriptionController;
+use App\Http\Controllers\API\Platform\AdminSupportController;
 use App\Http\Controllers\API\Platform\AdminTenantController;
 use App\Http\Controllers\API\Platform\AdminTenantDataController;
 use App\Http\Controllers\API\Platform\PlatformStatsController;
@@ -85,6 +86,7 @@ use App\Http\Controllers\API\Tenancy\Settings\PortalSettingsController;
 use App\Http\Controllers\API\Tenancy\StaffContextController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionPlanController;
+use App\Http\Controllers\API\Tenancy\Support\OrgSupportController;
 use App\Http\Controllers\API\Tenancy\Zatca\ZatcaController;
 use App\Http\Controllers\API\Tenancy\Zatca\ZatcaPhase2Controller;
 use App\Http\Controllers\API\User\PermissionController;
@@ -567,6 +569,21 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
+    | Gaslah — Support, the laundry's side
+    |--------------------------------------------------------------------------
+    |
+    | Any staff member may raise a ticket and follow it: whoever hits the problem is who
+    | needs to report it. Everything is scoped to the caller's own organization.
+    */
+    Route::prefix('support')->group(function () {
+        Route::get('/', [OrgSupportController::class, 'index']);
+        Route::post('/', [OrgSupportController::class, 'store']);
+        Route::get('{ticket}', [OrgSupportController::class, 'show']);
+        Route::post('{ticket}/reply', [OrgSupportController::class, 'reply']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
     | Gaslah — The organization's own settings
     |--------------------------------------------------------------------------
     |
@@ -663,6 +680,26 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
 
     /*
     |--------------------------------------------------------------------------
+    | Gaslah — Support, the operator's inbox
+    |--------------------------------------------------------------------------
+    |
+    | Any platform admin may read the queue; answering a tenant and triaging a ticket
+    | need manage_support.
+    */
+    Route::prefix('support')->group(function () {
+        // Bare: any platform admin, whatever they hold. A tenant staff token is still
+        // refused — reading every laundry's tickets is a platform act.
+        Route::get('/', [AdminSupportController::class, 'index'])->middleware('platform.permission');
+        Route::get('{ticket}', [AdminSupportController::class, 'show'])->middleware('platform.permission');
+
+        Route::middleware('platform.permission:manage_support')->group(function () {
+            Route::post('{ticket}/reply', [AdminSupportController::class, 'reply']);
+            Route::put('{ticket}', [AdminSupportController::class, 'update']);
+        });
+    });
+
+    /*
+    |--------------------------------------------------------------------------
     | Gaslah — The operator's settings centre
     |--------------------------------------------------------------------------
     |
@@ -705,8 +742,10 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     // commercial decision. Devices retire through is_active, never delete — past
     // invoices name them.
     Route::prefix('devices')->group(function () {
-        Route::get('/', [AdminDeviceController::class, 'index']);
-        Route::get('{device}', [AdminDeviceController::class, 'show']);
+        // Bare: any platform admin. Without it these read as public to any authenticated
+        // token at all, tenant staff included — and this is the operator's cost base.
+        Route::get('/', [AdminDeviceController::class, 'index'])->middleware('platform.permission');
+        Route::get('{device}', [AdminDeviceController::class, 'show'])->middleware('platform.permission');
 
         Route::middleware('platform.permission:manage_subscriptions')->group(function () {
             Route::post('/', [AdminDeviceController::class, 'store']);

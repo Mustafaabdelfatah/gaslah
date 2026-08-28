@@ -150,9 +150,13 @@ class IntegrationSettingsApiTest extends TestCase
 
         // A flipped byte must fail loudly rather than yield altered plaintext: GCM
         // authenticates the ciphertext, so a tampered value has no "best effort" reading.
+        //
+        // Flip a character in the middle, never the last one: base64's final character
+        // carries unused trailing bits, so changing it can decode to the very same bytes
+        // and leave the tag valid.
         $body = substr($wrapped, strlen('enc:v1:'));
-        $last = substr($body, -1);
-        $tampered = substr($body, 0, -1).($last === 'A' ? 'B' : 'A');
+        $at = intdiv(strlen($body), 2);
+        $tampered = substr($body, 0, $at).($body[$at] === 'A' ? 'B' : 'A').substr($body, $at + 1);
 
         $this->expectException(RuntimeException::class);
         SecretValue::decrypt('enc:v1:'.$tampered);

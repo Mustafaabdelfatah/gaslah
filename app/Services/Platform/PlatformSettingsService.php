@@ -38,7 +38,28 @@ class PlatformSettingsService
             'key' => 'platform.ownership',
             'defaults' => ['ownershipCeiling' => 100.0],
         ],
+
+        // How support runs: the categories a tenant may file under, how long the operator
+        // may leave a ticket unanswered before it counts as breached, and the automatic
+        // acknowledgement a new ticket gets.
+        'support' => [
+            'key' => 'platform.support',
+            'defaults' => [
+                'categories' => [],
+                'slaResponseMinutes' => 240,
+                'autoReplyEnabled' => false,
+                'autoReplyText' => null,
+            ],
+        ],
     ];
+
+    /**
+     * Groups already read this request. The store is a table, and a listing that asks the
+     * same group once per row would turn one setting into an N+1.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private array $resolved = [];
 
     public function __construct(private readonly PlatformConfigStore $store) {}
 
@@ -78,6 +99,10 @@ class PlatformSettingsService
      */
     public function group(string $group): array
     {
+        if (array_key_exists($group, $this->resolved)) {
+            return $this->resolved[$group];
+        }
+
         $defaults = self::GROUPS[$group]['defaults'] ?? [];
 
         $stored = $this->store->get(self::GROUPS[$group]['key'] ?? '', []);
@@ -85,7 +110,7 @@ class PlatformSettingsService
 
         // Only declared keys survive, so a key dropped from a group stops being served the
         // moment it is removed here rather than lingering in the store's JSON.
-        return array_intersect_key([...$defaults, ...$stored], $defaults);
+        return $this->resolved[$group] = array_intersect_key([...$defaults, ...$stored], $defaults);
     }
 
     /**
@@ -100,6 +125,9 @@ class PlatformSettingsService
     public function save(string $group, array $values): array
     {
         $this->store->put(self::GROUPS[$group]['key'], [...$this->group($group), ...$values]);
+
+        // The row just changed underneath the memo.
+        unset($this->resolved[$group]);
 
         return $this->group($group);
     }
@@ -135,5 +163,22 @@ class PlatformSettingsService
     public function ownershipCeiling(): float
     {
         return (float) $this->group('partners')['ownershipCeiling'];
+    }
+
+    /**
+     * How support is configured.
+     *
+     * @return array{categories: array<int, string>, slaResponseMinutes: int, autoReplyEnabled: bool, autoReplyText: ?string}
+     */
+    public function support(): array
+    {
+        $support = $this->group('support');
+
+        return [
+            'categories' => is_array($support['categories']) ? array_values($support['categories']) : [],
+            'slaResponseMinutes' => (int) $support['slaResponseMinutes'],
+            'autoReplyEnabled' => (bool) $support['autoReplyEnabled'],
+            'autoReplyText' => $support['autoReplyText'],
+        ];
     }
 }

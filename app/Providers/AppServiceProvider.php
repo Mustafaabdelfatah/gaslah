@@ -10,6 +10,7 @@ use App\Policies\User\UserPolicy;
 use App\Services\Messaging\Providers\LogProvider;
 use App\Services\Messaging\Providers\MessagingProvider;
 use App\Services\Messaging\Providers\WhatsAppProvider;
+use App\Services\Platform\PlatformSettingsService;
 use App\Services\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
@@ -27,6 +28,11 @@ class AppServiceProvider extends ServiceProvider
         // Scoped: the resolved tenant belongs to one request and must not leak into
         // the next one on a long-running worker.
         $this->app->scoped(TenantContext::class);
+
+        // Scoped for the same reason, and because it memoises: the platform's settings
+        // live in a table, and a listing that asks for the same group once per row would
+        // turn one setting into an N+1.
+        $this->app->scoped(PlatformSettingsService::class);
 
         // The platform messaging transport: the real WhatsApp provider when platform
         // credentials are set, otherwise the log stub. Custom per-org providers are

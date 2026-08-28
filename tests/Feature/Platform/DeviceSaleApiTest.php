@@ -170,6 +170,17 @@ class DeviceSaleApiTest extends TestCase
             ->assertJsonPath('data.totals.revenue', 1000);
     }
 
+    public function test_the_hardware_catalogue_is_not_readable_by_a_tenant(): void
+    {
+        // "Any admin reads it" means any *platform* admin. Prices here are the operator's
+        // cost base, not something a laundry it sells to may browse.
+        $this->app['auth']->forgetGuards();
+        Sanctum::actingAs($this->createUser());
+
+        $this->getJson('/api/admin/devices')->assertStatus(403);
+        $this->getJson("/api/admin/devices/{$this->device->getKey()}")->assertStatus(403);
+    }
+
     private function draft(): int
     {
         return $this->postJson('/api/admin/device-sales', [
