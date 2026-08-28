@@ -18,6 +18,9 @@ use App\Http\Controllers\API\Global\Notification\NotificationController;
 use App\Http\Controllers\API\Global\Report\ReportController;
 use App\Http\Controllers\API\Global\Setting\SettingController;
 use App\Http\Controllers\API\Global\Setting\TestCredentialsController;
+use App\Http\Controllers\API\Market\MarketController;
+use App\Http\Controllers\API\Market\SupplierAuthController;
+use App\Http\Controllers\API\Market\SupplierPortalController;
 use App\Http\Controllers\API\Messaging\WaWebhookController;
 use App\Http\Controllers\API\Payments\PayController;
 use App\Http\Controllers\API\Platform\AdminAnnouncementController;
@@ -529,6 +532,23 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
+    | Gaslah — B2B Supplies Market, buyer side (staff, feature: supplier_market)
+    |--------------------------------------------------------------------------
+    |
+    | Read and create only. There is deliberately no route for a buyer to change an
+    | order's state or cancel it — the lifecycle belongs to the supplier.
+    */
+    Route::prefix('market')->middleware('tenant:feature,supplier_market')->group(function () {
+        Route::get('products', [MarketController::class, 'products']);
+        Route::get('products/{product}', [MarketController::class, 'product']);
+
+        Route::get('orders', [MarketController::class, 'orders']);
+        Route::post('orders', [MarketController::class, 'placeOrder']);
+        Route::get('orders/{marketOrder}', [MarketController::class, 'order']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
     | Gaslah — Shifts (staff, permission: shifts.manage)
     |--------------------------------------------------------------------------
     */
@@ -752,5 +772,33 @@ Route::prefix('portal')->group(function () {
         Route::post('delivery/{id}/approve-invoice', [PortalDeliveryController::class, 'approveInvoice']);
 
         Route::get('announcements', [PortalController::class, 'announcements']);
+    });
+});
+
+/*
+|--------------------------------------------------------------------------
+| Gaslah — Market Supplier Portal (email + password, kind=supplier)
+|--------------------------------------------------------------------------
+|
+| A surface of its own: a supplier belongs to no tenant and sells to many, so nothing
+| here goes through the tenant middleware. Every query is scoped by the supplier id
+| carried on the token.
+*/
+Route::prefix('supplier')->group(function () {
+    Route::post('auth/login', [SupplierAuthController::class, 'login'])->middleware('throttle:10,1');
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('auth/logout', [SupplierAuthController::class, 'logout']);
+
+        Route::get('me', [SupplierPortalController::class, 'me']);
+
+        Route::get('products', [SupplierPortalController::class, 'products']);
+        Route::post('products', [SupplierPortalController::class, 'storeProduct']);
+        // Listing and delisting ride on this endpoint too, through is_active.
+        Route::put('products/{product}', [SupplierPortalController::class, 'updateProduct']);
+
+        Route::get('orders', [SupplierPortalController::class, 'orders']);
+        Route::get('orders/{marketOrder}', [SupplierPortalController::class, 'order']);
+        Route::patch('orders/{marketOrder}', [SupplierPortalController::class, 'updateOrderStatus']);
     });
 });
