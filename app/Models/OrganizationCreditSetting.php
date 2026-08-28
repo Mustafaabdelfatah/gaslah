@@ -15,6 +15,17 @@ class OrganizationCreditSetting extends BaseModel
         'default_limit',
     ];
 
+    /**
+     * Mirrors the column defaults, for the unsaved model an organization that has never
+     * opened this panel is answered with.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'is_enabled' => false,
+        'default_limit' => 0,
+    ];
+
     protected $casts = [
         'is_enabled' => 'boolean',
         'default_limit' => 'decimal:2',

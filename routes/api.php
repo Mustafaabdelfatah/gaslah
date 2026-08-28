@@ -75,7 +75,11 @@ use App\Http\Controllers\API\Tenancy\Reports\BankController;
 use App\Http\Controllers\API\Tenancy\Reports\DashboardController;
 use App\Http\Controllers\API\Tenancy\Reports\ReportController as SalesReportController;
 use App\Http\Controllers\API\Tenancy\Reports\ShiftController;
+use App\Http\Controllers\API\Tenancy\Settings\BusinessSettingsController;
+use App\Http\Controllers\API\Tenancy\Settings\CreditSettingsController;
 use App\Http\Controllers\API\Tenancy\Settings\IntegrationSettingsController;
+use App\Http\Controllers\API\Tenancy\Settings\NotificationSettingsController;
+use App\Http\Controllers\API\Tenancy\Settings\PortalSettingsController;
 use App\Http\Controllers\API\Tenancy\StaffContextController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionPlanController;
@@ -557,6 +561,31 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/', [ShiftController::class, 'index']);
         Route::post('open', [ShiftController::class, 'open']);
         Route::post('close', [ShiftController::class, 'close']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — The organization's own settings
+    |--------------------------------------------------------------------------
+    |
+    | Each panel is read by a manager and written by the general manager alone, and each
+    | saves on its own so one panel can never overwrite what another holds.
+    |
+    | These sit under `settings/*` beside the starter's platform-wide `GET /settings`,
+    | which is a different thing entirely: that one is the deployment's own configuration.
+    */
+    Route::prefix('settings')->middleware('tenant:manager')->group(function () {
+        Route::get('business', [BusinessSettingsController::class, 'show']);
+        Route::get('portal', [PortalSettingsController::class, 'show']);
+        Route::get('credit', [CreditSettingsController::class, 'show']);
+        Route::get('notifications', [NotificationSettingsController::class, 'show']);
+
+        Route::middleware('tenant:super_admin')->group(function () {
+            Route::put('business', [BusinessSettingsController::class, 'update']);
+            Route::put('portal', [PortalSettingsController::class, 'update']);
+            Route::put('credit', [CreditSettingsController::class, 'update']);
+            Route::put('notifications', [NotificationSettingsController::class, 'update']);
+        });
     });
 
     // A tenant's third-party credentials. Reading shows which integrations are live;
