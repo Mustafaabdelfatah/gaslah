@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Sanctum\Sanctum;
+use Spatie\Activitylog\Models\Activity;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -54,5 +55,29 @@ class AppServiceProvider extends ServiceProvider
         // Policies
         Gate::policy(Role::class, RolePolicy::class);
         Gate::policy(User::class, UserPolicy::class);
+
+        $this->stampTenantOnActivity();
+    }
+
+    /**
+     * Stamp the owning tenant on every activity row as it is written.
+     *
+     * Done centrally rather than per model on purpose: the audit trail's isolation must
+     * hold for every logged model, including ones added later by someone who never reads
+     * this file. The tenant is taken from the record itself where it has one, and
+     * otherwise from the acting user's context; platform-level activity stays null.
+     */
+    private function stampTenantOnActivity(): void
+    {
+        Activity::saving(static function (Activity $activity): void {
+            if ($activity->organization_id !== null) {
+                return;
+            }
+
+            $subject = $activity->subject;
+
+            $activity->organization_id = $subject?->getAttribute('organization_id')
+                ?? app(TenantContext::class)->organizationId();
+        });
     }
 }

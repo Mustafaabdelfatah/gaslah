@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Trait\Global\LogsActivityOptions;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class InventoryItem extends BaseModel
 {
-    use HasFactory;
+    use HasFactory, LogsActivityOptions;
 
     protected $fillable = [
         'organization_id',

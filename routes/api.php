@@ -44,6 +44,7 @@ use App\Http\Controllers\API\Tenancy\Accounting\AssetController;
 use App\Http\Controllers\API\Tenancy\Accounting\BooksLockController;
 use App\Http\Controllers\API\Tenancy\Accounting\ExpenseController;
 use App\Http\Controllers\API\Tenancy\Accounting\JournalController;
+use App\Http\Controllers\API\Tenancy\Audit\AuditController;
 use App\Http\Controllers\API\Tenancy\Auth\PlatformLoginController;
 use App\Http\Controllers\API\Tenancy\Auth\StaffLoginController;
 use App\Http\Controllers\API\Tenancy\Catalog\CatalogController;
@@ -536,6 +537,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('open', [ShiftController::class, 'open']);
         Route::post('close', [ShiftController::class, 'close']);
     });
+
+    // The tenant's own audit trail. Read-only, and the general manager's alone: it shows
+    // what every member of the organization did, including each other.
+    Route::get('audit', [AuditController::class, 'index'])->middleware('tenant:super_admin');
 
     /*
     |--------------------------------------------------------------------------

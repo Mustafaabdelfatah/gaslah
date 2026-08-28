@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Trait\Global\LogsActivityOptions;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Product extends BaseModel
 {
-    use HasFactory;
+    use HasFactory, LogsActivityOptions;
 
     protected $fillable = [
         'legacy_cuid',

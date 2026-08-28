@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enum\Accounting\JournalSourceEnum;
+use App\Trait\Global\LogsActivityOptions;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class JournalEntry extends BaseModel
 {
-    use HasFactory;
+    use HasFactory, LogsActivityOptions;
 
     protected $fillable = [
         'legacy_cuid',

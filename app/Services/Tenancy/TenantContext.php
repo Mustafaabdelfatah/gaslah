@@ -25,6 +25,22 @@ class TenantContext
 
     private bool $resolved = false;
 
+    /**
+     * Whose membership the cached answer belongs to.
+     *
+     * The context is a singleton, so it must notice when the authenticated principal
+     * changes underneath it — a request that resolves while nobody is signed in (a public
+     * signup, say) would otherwise cache "no organization" and hand that stale answer to
+     * the next, authenticated caller.
+     */
+    private ?int $resolvedForUserId = null;
+
+    /**
+     * Whether the current binding came from {@see forUser} rather than from the guard.
+     * An explicit binding is the caller's decision and is never re-derived.
+     */
+    private bool $boundExplicitly = false;
+
     private ?User $user = null;
 
     private ?int $organizationId = null;
@@ -46,6 +62,8 @@ class TenantContext
         $this->reset();
         $this->user = $user;
         $this->resolved = true;
+        $this->resolvedForUserId = $user?->getKey();
+        $this->boundExplicitly = true;
         $this->resolveOrganization();
 
         return $this;
@@ -177,14 +195,17 @@ class TenantContext
     */
     private function boot(): void
     {
-        if ($this->resolved) {
+        $current = auth()->user();
+        $currentId = $current instanceof User ? $current->getKey() : null;
+
+        if ($this->boundExplicitly || ($this->resolved && $this->resolvedForUserId === $currentId)) {
             return;
         }
 
+        $this->reset();
         $this->resolved = true;
-
-        $user = auth()->user();
-        $this->user = $user instanceof User ? $user : null;
+        $this->resolvedForUserId = $currentId;
+        $this->user = $current instanceof User ? $current : null;
 
         $this->resolveOrganization();
     }
@@ -232,6 +253,8 @@ class TenantContext
     private function reset(): void
     {
         $this->resolved = false;
+        $this->resolvedForUserId = null;
+        $this->boundExplicitly = false;
         $this->user = null;
         $this->organizationId = null;
         $this->writeBranchId = null;

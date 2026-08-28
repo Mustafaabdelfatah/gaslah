@@ -4,12 +4,13 @@ namespace App\Models;
 
 use App\Enum\Payments\PaymentMethodEnum;
 use App\Enum\Payments\PaymentVerifyModeEnum;
+use App\Trait\Global\LogsActivityOptions;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Payment extends BaseModel
 {
-    use HasFactory;
+    use HasFactory, LogsActivityOptions;
 
     public const UPDATED_AT = null;
 

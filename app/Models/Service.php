@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enum\Catalog\PricingTypeEnum;
 use App\Enum\Catalog\ServiceTypeEnum;
+use App\Trait\Global\LogsActivityOptions;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Service extends BaseModel
 {
-    use HasFactory;
+    use HasFactory, LogsActivityOptions;
 
     protected $fillable = [
         'legacy_cuid',

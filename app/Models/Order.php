@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enum\Orders\OrderPriorityEnum;
 use App\Enum\Orders\OrderStatusEnum;
 use App\Enum\Orders\PaymentStatusEnum;
+use App\Trait\Global\LogsActivityOptions;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -18,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Order extends BaseModel
 {
-    use HasFactory;
+    use HasFactory, LogsActivityOptions;
 
     protected $fillable = [
         'legacy_cuid',
