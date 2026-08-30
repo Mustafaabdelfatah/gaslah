@@ -84,6 +84,7 @@ use App\Http\Controllers\API\Tenancy\Settings\BusinessSettingsController;
 use App\Http\Controllers\API\Tenancy\Settings\CreditSettingsController;
 use App\Http\Controllers\API\Tenancy\Settings\IntegrationSettingsController;
 use App\Http\Controllers\API\Tenancy\Settings\NotificationSettingsController;
+use App\Http\Controllers\API\Tenancy\BranchController;
 use App\Http\Controllers\API\Tenancy\Settings\PortalSettingsController;
 use App\Http\Controllers\API\Tenancy\StaffContextController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionController;
@@ -177,6 +178,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // Gaslah: the signed-in staff member's live tenant context.
     Route::get('staff/context', StaffContextController::class);
+    // Gaslah: the organization's branches, for the header branch switcher.
+    Route::get('branches', [BranchController::class, 'index']);
     Route::post('update-setting', [ProfileController::class, 'updateSetting']);
     Route::post('update-profile', [ProfileController::class, 'updateProfile']);
     Route::post('destroy-avatar', [ProfileController::class, 'destroyAvatar']);
