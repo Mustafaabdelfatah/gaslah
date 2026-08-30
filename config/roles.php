@@ -107,9 +107,12 @@ return [
      |
      */
     'additional_operations' => [
+        // Registers the `report-home` permission (resource "home", operation "report")
+        // that the default_role below grants. The pair must agree in {operation}-{resource}
+        // order, or Access::handle() throws PermissionDoesNotExist while seeding.
         [
-            'name' => 'Report',
-            'operations' => ['home'],
+            'name' => 'home',
+            'operations' => ['report'],
         ],
         [
             'name' => 'Log',
