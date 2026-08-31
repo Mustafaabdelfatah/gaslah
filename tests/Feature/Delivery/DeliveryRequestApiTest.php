@@ -188,7 +188,7 @@ class DeliveryRequestApiTest extends TestCase
 
         $this->getJson('/api/delivery/stats')
             ->assertOk()
-            ->assertJsonPath('data.pendingAssignment', 1);
+            ->assertJsonPath('data.pending_assignment', 1);
     }
 
     public function test_a_foreign_customer_cannot_receive_a_request(): void

@@ -193,14 +193,14 @@ class DeliveryRequestService
         $window = (clone $base())->where('created_at', '>=', $since);
 
         return [
-            'pendingAssignment' => (clone $base())->where('status', DeliveryStatusEnum::Requested->value)->whereNull('driver_id')->count(),
-            'inPickup' => (clone $base())->where('type', DeliveryTypeEnum::Pickup->value)->whereIn('status', ['assigned', 'picked_up'])->count(),
-            'inDelivery' => (clone $base())->where('type', DeliveryTypeEnum::Delivery->value)->whereIn('status', self::OPEN_STATUSES)->count(),
+            'pending_assignment' => (clone $base())->where('status', DeliveryStatusEnum::Requested->value)->whereNull('driver_id')->count(),
+            'in_pickup' => (clone $base())->where('type', DeliveryTypeEnum::Pickup->value)->whereIn('status', ['assigned', 'picked_up'])->count(),
+            'in_delivery' => (clone $base())->where('type', DeliveryTypeEnum::Delivery->value)->whereIn('status', self::OPEN_STATUSES)->count(),
             'delivered' => (clone $window)->where('status', DeliveryStatusEnum::Delivered->value)->count(),
             'cancelled' => (clone $window)->where('status', DeliveryStatusEnum::Cancelled->value)->count(),
             'total' => (clone $window)->count(),
-            'activeDrivers' => Driver::query()->active()->where('is_platform', false)->whereIn('branch_id', $branchIds)->count(),
-            'avgDeliveryMinutes' => $this->avgDeliveryMinutes($branchIds, $since),
+            'active_drivers' => Driver::query()->active()->where('is_platform', false)->whereIn('branch_id', $branchIds)->count(),
+            'avg_delivery_minutes' => $this->avgDeliveryMinutes($branchIds, $since),
         ];
     }
 
