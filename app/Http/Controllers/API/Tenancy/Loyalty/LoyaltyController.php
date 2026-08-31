@@ -6,6 +6,7 @@ use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Loyalty\AdjustPointsRequest;
 use App\Http\Requests\Loyalty\LoyaltyProgramRequest;
 use App\Http\Requests\Loyalty\RedeemPointsRequest;
+use App\Http\Resources\Loyalty\LoyaltyAccountResource;
 use App\Models\Customer;
 use App\Models\LoyaltyProgram;
 use App\Services\Loyalty\LoyaltyService;
@@ -50,7 +51,9 @@ class LoyaltyController extends TenantController
     public function accounts(): JsonResponse
     {
 
-        return successResponse($this->loyalty->accounts($this->organizationId(), $this->readBranchIds()));
+        return successResponse(LoyaltyAccountResource::collection(
+            $this->loyalty->accounts($this->organizationId(), $this->readBranchIds()),
+        ));
     }
 
     /**
