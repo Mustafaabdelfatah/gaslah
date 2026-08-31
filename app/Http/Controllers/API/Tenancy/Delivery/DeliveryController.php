@@ -176,7 +176,7 @@ class DeliveryController extends TenantController
 
         $delivery->load('customer', 'driver', 'order', 'zone', 'history');
 
-        return successResponse(new DeliveryRequestResource($delivery, [
+        return successResponse((new DeliveryRequestResource($delivery))->withSignedPhotos([
             'pickup' => $this->signedPhotoUrl($delivery->pickup_photo_url),
             'delivery' => $this->signedPhotoUrl($delivery->delivery_photo_url),
         ]));

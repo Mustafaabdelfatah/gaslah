@@ -56,6 +56,22 @@ class DeliveryRequestApiTest extends TestCase
         $this->assertSame($driver->getKey(), (int) $response->json('data.0.driver_id'));
     }
 
+    public function test_the_request_listing_renders(): void
+    {
+        $this->driver();
+        $this->postJson('/api/delivery/requests', [
+            'customer_id' => $this->customer->getKey(), 'type' => 'pickup', 'address' => 'Street 1',
+        ])->assertCreated();
+
+        // Building the collection maps the resource in with the item's key as a
+        // second argument, which a second constructor parameter would reject.
+        $this->getJson('/api/delivery/requests')
+            ->assertOk()
+            ->assertJsonPath('data.data.0.type', 'pickup')
+            // Signed photo URLs belong to the detail view only.
+            ->assertJsonMissingPath('data.data.0.pickup_photo_signed_url');
+    }
+
     public function test_both_creates_a_pickup_and_a_delivery(): void
     {
         $this->driver();

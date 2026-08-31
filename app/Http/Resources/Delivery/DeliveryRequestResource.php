@@ -14,11 +14,25 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class DeliveryRequestResource extends JsonResource
 {
     /**
-     * @param  array{pickup: string|null, delivery: string|null}|null  $signedPhotos
+     * @var array{pickup: string|null, delivery: string|null}|null
      */
-    public function __construct($resource, private readonly ?array $signedPhotos = null)
+    private ?array $signedPhotos = null;
+
+    /**
+     * Attach the time-limited photo URLs.
+     *
+     * This is a setter rather than a constructor argument because building a
+     * collection maps the resource in with `mapInto`, which passes the item's
+     * key as a second argument — a second constructor parameter makes every
+     * listing fail on a type error.
+     *
+     * @param  array{pickup: string|null, delivery: string|null}  $urls
+     */
+    public function withSignedPhotos(array $urls): static
     {
-        parent::__construct($resource);
+        $this->signedPhotos = $urls;
+
+        return $this;
     }
 
     public function toArray(Request $request): array
