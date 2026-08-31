@@ -278,6 +278,73 @@ class WaService
     }
 
     /**
+     * The quota picture the overview screen shows: what the org may send this month,
+     * what it has sent, and the same per branch.
+     *
+     * The limits are the platform's to set, so they are reported rather than assumed —
+     * a bar with no ceiling tells a tenant nothing.
+     *
+     * @param  array<int, array{id: int, name: string}>  $branches
+     * @return array<string, mixed>
+     */
+    public function quotaSnapshot(int $organizationId, array $branches): array
+    {
+        $limits = $this->limits($organizationId);
+        $monthlyLimit = (int) ($limits['monthly_limit'] ?? self::DEFAULT_ORG_QUOTA);
+
+        return [
+            'org_used' => $this->monthUsed($organizationId, null),
+            'org_limit' => $monthlyLimit,
+            // The platform can switch a tenant off outright; the screen says so rather
+            // than letting every send fail with no explanation.
+            'allowed' => ($limits['enabled'] ?? true) !== false && config('messaging.platform_enabled', true),
+            'sender_mode' => $this->senderMode($organizationId),
+
+            'branches' => array_map(fn (array $branch) => [
+                'id' => $branch['id'],
+                'name' => $branch['name'],
+                'used' => $this->monthUsed($organizationId, $branch['id']),
+                'limit' => (int) ($limits['branch_limits'][$branch['id']] ?? 0),
+            ], $branches),
+        ];
+    }
+
+    /**
+     * Messages per calendar month over the last `$months`, oldest first.
+     *
+     * Bucketed in PHP rather than SQL: month extraction is dialect-specific and this
+     * project runs on more than one database.
+     *
+     * @return array<int, array{month: string, count: int}>
+     */
+    public function monthlyTrend(int $organizationId, int $months = 6): array
+    {
+        $start = CarbonImmutable::now()->startOfMonth()->subMonths($months - 1);
+
+        $buckets = [];
+        for ($i = 0; $i < $months; $i++) {
+            $buckets[$start->addMonths($i)->format('Y-m')] = 0;
+        }
+
+        WaMessage::query()
+            ->where('organization_id', $organizationId)
+            ->where('created_at', '>=', $start)
+            ->get(['created_at'])
+            ->each(function (WaMessage $message) use (&$buckets) {
+                $key = CarbonImmutable::instance($message->created_at)->format('Y-m');
+                if (array_key_exists($key, $buckets)) {
+                    $buckets[$key]++;
+                }
+            });
+
+        return array_map(
+            static fn (string $month, int $count) => ['month' => $month, 'count' => $count],
+            array_keys($buckets),
+            $buckets,
+        );
+    }
+
+    /**
      * This month's message counts grouped by one column, for the overview screen.
      *
      * @return array<int, array{key: string, count: int}>
@@ -286,7 +353,7 @@ class WaService
     {
         return WaMessage::query()
             ->where('organization_id', $organizationId)
-            ->where('created_at', '>=', Carbon::now()->startOfMonth())
+            ->where('created_at', '>=', CarbonImmutable::now()->startOfMonth())
             ->selectRaw("{$column} as k, COUNT(*) as c")
             ->groupBy($column)
             ->get()

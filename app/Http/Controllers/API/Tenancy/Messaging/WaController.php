@@ -7,6 +7,7 @@ use App\Enum\Messaging\WaEventEnum;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Messaging\SendTestMessageRequest;
 use App\Http\Requests\Messaging\WaTemplateRequest;
+use App\Models\Branch;
 use App\Models\WaMessage;
 use App\Models\WaTemplate;
 use App\Services\Messaging\WaService;
@@ -32,14 +33,20 @@ class WaController extends TenantController
 
         $organizationId = $this->organizationId();
 
+        $branches = Branch::query()
+            ->where('organization_id', $organizationId)
+            ->orderBy('id')
+            ->get(['id', 'name'])
+            ->map(fn (Branch $branch) => ['id' => $branch->id, 'name' => $branch->name])
+            ->all();
+
         return successResponse([
-            'usage' => [
-                'org_used' => $this->wa->monthUsed($organizationId, null),
-            ],
+            'usage' => $this->wa->quotaSnapshot($organizationId, $branches),
             'stats' => [
-                'by_status' => $this->wa->monthlyCountsBy($this->organizationId(), 'status'),
-                'by_category' => $this->wa->monthlyCountsBy($this->organizationId(), 'category'),
-                'by_event' => $this->wa->monthlyCountsBy($this->organizationId(), 'event_key'),
+                'by_status' => $this->wa->monthlyCountsBy($organizationId, 'status'),
+                'by_category' => $this->wa->monthlyCountsBy($organizationId, 'category'),
+                'by_event' => $this->wa->monthlyCountsBy($organizationId, 'event_key'),
+                'trend' => $this->wa->monthlyTrend($organizationId),
             ],
         ]);
     }

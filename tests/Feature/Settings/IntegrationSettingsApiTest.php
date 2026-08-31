@@ -100,6 +100,27 @@ class IntegrationSettingsApiTest extends TestCase
         $this->assertArrayNotHasKey('notARealEvent', $events, 'an unknown key must not sit in the config pretending to gate something');
     }
 
+    public function test_switching_one_event_leaves_the_others_alone(): void
+    {
+        $this->actingAsStaff($this->createStaff($this->branch, StaffRoleEnum::SuperAdmin));
+
+        $before = $this->getJson('/api/settings/integrations')->assertOk()->json('data.messaging.events');
+        $this->assertNotEmpty($before);
+
+        // One switch, sent on its own: everything else must survive it.
+        $this->putJson('/api/settings/integrations', [
+            'messaging' => ['events' => ['orderCompleted' => true]],
+        ])->assertOk();
+
+        $after = $this->getJson('/api/settings/integrations')->assertOk()->json('data.messaging.events');
+
+        $this->assertTrue($after['orderCompleted']);
+        $this->assertSame(
+            array_diff_key($before, ['orderCompleted' => null]),
+            array_diff_key($after, ['orderCompleted' => null]),
+        );
+    }
+
     public function test_defaults_are_present_before_anything_is_configured(): void
     {
         $this->actingAsStaff($this->createStaff($this->branch, StaffRoleEnum::Cashier));

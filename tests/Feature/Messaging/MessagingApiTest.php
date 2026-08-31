@@ -101,6 +101,21 @@ class MessagingApiTest extends TestCase
         $this->deleteJson("/api/wa/templates/{$id}")->assertOk();
     }
 
+    public function test_the_overview_reports_this_month_grouped_three_ways(): void
+    {
+        $this->actingAsStaff($this->createStaff($this->branch, StaffRoleEnum::SuperAdmin));
+
+        $this->postJson('/api/wa/test', ['phone' => '0506666666'])->assertOk();
+
+        $this->getJson('/api/wa/overview')
+            ->assertOk()
+            ->assertJsonPath('data.usage.org_used', 1)
+            ->assertJsonPath('data.stats.by_event.0.key', 'test')
+            ->assertJsonPath('data.stats.by_event.0.count', 1)
+            ->assertJsonCount(1, 'data.stats.by_status')
+            ->assertJsonCount(1, 'data.stats.by_category');
+    }
+
     public function test_the_screen_requires_the_messaging_feature(): void
     {
         $this->organization->update(['feature_overrides' => ['messaging' => false]]);

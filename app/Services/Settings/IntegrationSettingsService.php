@@ -112,7 +112,7 @@ class IntegrationSettingsService
             'sms_provider' => data_get($messaging, 'sms.provider'),
             'sms_sender' => data_get($messaging, 'sms.sender'),
 
-            'events' => $this->cleanEvents($messaging['events'] ?? null),
+            'events' => $this->cleanEvents($messaging['events'] ?? null, $config->events ?? $this->defaultEvents()),
             'templates' => $this->cleanTemplates($messaging['templates'] ?? null, $config->templates ?? []),
         ], static fn ($value) => $value !== null));
 
@@ -166,15 +166,22 @@ class IntegrationSettingsService
     }
 
     /**
+     * Merge the supplied switches onto the stored ones.
+     *
+     * A partial map changes only the events it names. Replacing the map outright would
+     * mean a caller who sends one switch silently turns every other one off — the same
+     * erasure-by-omission this class refuses for secrets.
+     *
+     * @param  array<string, bool>  $stored
      * @return array<string, bool>|null
      */
-    private function cleanEvents(mixed $events): ?array
+    private function cleanEvents(mixed $events, array $stored): ?array
     {
         if (! is_array($events)) {
             return null;
         }
 
-        $clean = [];
+        $clean = $stored;
 
         foreach (self::EVENTS as $event) {
             if (array_key_exists($event, $events)) {
