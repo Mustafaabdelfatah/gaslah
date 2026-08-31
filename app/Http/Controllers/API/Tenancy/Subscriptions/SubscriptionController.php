@@ -25,7 +25,8 @@ class SubscriptionController extends TenantController
 
         $query = Subscription::query()
             ->inBranches($this->readBranchIds())
-            ->with(['customer:id,name,phone', 'plan:id,name,cycle,type'])
+            // price rides along because the listing is where a period is collected.
+            ->with(['customer:id,name,phone', 'plan:id,name,cycle,type,price'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')))
             ->when($request->filled('customer_id'), fn ($q) => $q->where('customer_id', $request->input('customer_id')))
             ->orderByDesc('end_at');
