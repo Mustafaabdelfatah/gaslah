@@ -84,6 +84,57 @@ class CatalogAndCustomerApiTest extends TestCase
         $this->assertEquals(18.0, $cell['express']);
     }
 
+    public function test_the_catalog_view_lists_every_active_category_even_empty_ones(): void
+    {
+        $this->actingAsManager();
+        $empty = $this->category();
+        $stocked = $this->category();
+        $this->postJson('/api/catalog/products', [
+            'category_id' => $stocked->getKey(),
+            'name' => 'Thobe',
+            'cells' => ['wash' => ['base_price' => 5]],
+        ]);
+
+        $response = $this->getJson('/api/catalog')->assertOk();
+
+        // The sellable tree drops the empty category; the full list keeps it.
+        $this->assertCount(1, $response->json('data.categories'));
+        $this->assertEqualsCanonicalizing(
+            [$empty->getKey(), $stocked->getKey()],
+            array_column($response->json('data.all_categories'), 'id'),
+        );
+    }
+
+    public function test_a_manager_reorders_products_within_a_category(): void
+    {
+        $this->actingAsManager();
+        $category = $this->category();
+        $ids = collect(['Thobe', 'Shirt'])->map(fn (string $name) => $this->postJson('/api/catalog/products', [
+            'category_id' => $category->getKey(),
+            'name' => $name,
+            'cells' => ['wash' => ['base_price' => 5]],
+        ])->json('data.id'))->all();
+
+        $this->putJson('/api/catalog/products/reorder', ['ids' => array_reverse($ids)])->assertOk();
+
+        $ordered = $this->getJson('/api/catalog')->json('data.categories.0.products');
+        $this->assertSame('Shirt', $ordered[0]['name']);
+        $this->assertSame('Thobe', $ordered[1]['name']);
+    }
+
+    public function test_reordering_a_foreign_product_fails_the_whole_request(): void
+    {
+        $this->actingAsManager();
+        $category = $this->category();
+        $ownId = $this->postJson('/api/catalog/products', [
+            'category_id' => $category->getKey(),
+            'name' => 'Thobe',
+            'cells' => ['wash' => ['base_price' => 5]],
+        ])->json('data.id');
+
+        $this->putJson('/api/catalog/products/reorder', ['ids' => [$ownId, 999999]])->assertStatus(404);
+    }
+
     public function test_a_customer_is_created_and_the_phone_is_unique_per_organization(): void
     {
         $this->actingAsManager();

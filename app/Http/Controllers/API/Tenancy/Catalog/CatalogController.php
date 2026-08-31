@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\Tenancy\Catalog;
 use App\Enum\Catalog\ServiceTypeEnum;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Catalog\ReorderCategoriesRequest;
+use App\Http\Requests\Catalog\ReorderProductsRequest;
 use App\Http\Requests\Catalog\ServiceCategoryRequest;
 use App\Http\Requests\Catalog\StoreProductRequest;
 use App\Http\Requests\Catalog\UpdateProductCodeRequest;
@@ -36,6 +37,7 @@ class CatalogController extends TenantController
 
         return successResponse([
             'categories' => ServiceCategoryResource::collection($this->catalog->sellableTree($this->organizationId())),
+            'all_categories' => ServiceCategoryResource::collection($this->catalog->activeCategories($this->organizationId())),
             'service_types' => array_map(fn (ServiceTypeEnum $type) => $type->value, ServiceTypeEnum::ordered()),
             'tax_rate' => (float) $this->organization()->tax_rate,
         ]);
@@ -94,6 +96,14 @@ class CatalogController extends TenantController
     {
 
         $this->catalog->reorder(ServiceCategory::class, $this->organizationId(), $request->ids());
+
+        return successResponse(msg: __('api.updated_success'));
+    }
+
+    public function reorderProducts(ReorderProductsRequest $request): JsonResponse
+    {
+
+        $this->catalog->reorder(Product::class, $this->organizationId(), $request->ids());
 
         return successResponse(msg: __('api.updated_success'));
     }

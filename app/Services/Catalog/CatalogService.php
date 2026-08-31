@@ -50,6 +50,23 @@ class CatalogService
     }
 
     /**
+     * Every active category in display order, including ones with nothing sellable yet.
+     *
+     * The management screen needs these — a freshly created category has no products,
+     * yet must appear so its first product can be added to it.
+     *
+     * @return Collection<int, ServiceCategory>
+     */
+    public function activeCategories(int $organizationId): Collection
+    {
+        return ServiceCategory::query()
+            ->forOrganization($organizationId)
+            ->active()
+            ->orderBy('sort_order')
+            ->get();
+    }
+
+    /**
      * Create a category, appended to the end of the tenant's display order.
      *
      * @param  array{name: string, name_en?: string|null, icon?: string|null}  $data
