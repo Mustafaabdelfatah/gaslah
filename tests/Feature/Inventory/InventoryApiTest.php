@@ -47,6 +47,17 @@ class InventoryApiTest extends TestCase
             ->assertJsonPath('data.low_stock', 1);
     }
 
+    public function test_the_item_listing_carries_the_units_the_form_needs(): void
+    {
+        $this->actingAsStaff($this->createStaff($this->branch, StaffRoleEnum::SuperAdmin));
+
+        // Units have no endpoint of their own, so the listing has to supply them.
+        $response = $this->getJson('/api/inventory/items')->assertOk();
+
+        $this->assertNotEmpty($response->json('data.units'));
+        $this->assertArrayHasKey('symbol', $response->json('data.units.0'));
+    }
+
     public function test_a_foreign_unit_is_refused(): void
     {
         $this->actingAsStaff($this->createStaff($this->branch, StaffRoleEnum::SuperAdmin));

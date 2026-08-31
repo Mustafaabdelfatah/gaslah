@@ -11,11 +11,17 @@ use App\Http\Resources\Inventory\InventoryItemResource;
 use App\Http\Resources\Inventory\PurchaseOrderResource;
 use App\Models\InventoryItem;
 use App\Models\PurchaseOrder;
+use App\Services\Inventory\UnitService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pipeline\Pipeline;
 
 class InventoryController extends TenantController
 {
+    public function __construct(private readonly UnitService $units)
+    {
+        parent::__construct();
+    }
+
     public function items(PageRequest $request): JsonResponse
     {
         $query = app(Pipeline::class)
@@ -31,7 +37,13 @@ class InventoryController extends TenantController
         // badge stays right however the list is paged.
         $lowStock = (clone $query)->lowStock()->count();
 
-        return successResponse(wrapPaginate($query, InventoryItemResource::class, ['low_stock' => $lowStock]));
+        // The units ride along so the item form can be built from one response —
+        // they have no endpoint of their own, and an item has to be counted in
+        // something.
+        return successResponse(wrapPaginate($query, InventoryItemResource::class, [
+            'low_stock' => $lowStock,
+            'units' => $this->units->forOrganization($this->organizationId()),
+        ]));
     }
 
     public function storeItem(InventoryItemRequest $request): JsonResponse
