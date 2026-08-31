@@ -390,6 +390,11 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::prefix('orders')->group(function () {
         Route::get('/', [OrderController::class, 'index']);
+
+        // Both sit above {order} so a literal segment is never read as an id.
+        Route::get('board', [OrderController::class, 'board']);
+        Route::get('scan/{code}', [OrderController::class, 'scan']);
+
         Route::get('{order}', [OrderController::class, 'show']);
         Route::patch('{order}/status', [OrderController::class, 'updateStatus']);
         Route::post('{order}/payment-link', [OrderController::class, 'paymentLink'])

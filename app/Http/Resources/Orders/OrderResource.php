@@ -22,6 +22,12 @@ class OrderResource extends JsonResource
             'barcode' => $this->barcode,
 
             'status' => $this->status,
+            // The workflow machine is the server's; a client that encoded it would
+            // drift the moment the rules change.
+            'next_statuses' => array_map(
+                static fn ($status) => $status->value,
+                $this->status->allowedNext(),
+            ),
             'priority' => $this->priority,
             'payment_status' => $this->payment_status,
 

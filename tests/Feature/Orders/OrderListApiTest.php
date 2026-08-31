@@ -95,6 +95,60 @@ class OrderListApiTest extends TestCase
     /**
      * @param  array<string, mixed>  $attributes
      */
+    public function test_the_board_groups_live_work_and_carries_the_next_steps(): void
+    {
+        $this->makeOrder(['status' => 'received']);
+        $this->makeOrder(['status' => 'processing']);
+        $this->makeOrder(['status' => 'ready']);
+        // Cancelled work is off the floor entirely — it belongs to no column.
+        $this->makeOrder(['status' => 'cancelled']);
+
+        $response = $this->getJson('/api/orders/board')->assertOk();
+
+        $response->assertJsonPath('data.total', 3)
+            ->assertJsonCount(1, 'data.columns.received')
+            ->assertJsonCount(1, 'data.columns.processing')
+            ->assertJsonCount(1, 'data.columns.ready')
+            ->assertJsonCount(0, 'data.columns.delivered')
+            // The flow machine travels with the card, so no client encodes it.
+            ->assertJsonPath('data.columns.ready.0.next_statuses', ['delivered']);
+    }
+
+    public function test_the_board_shows_only_today_in_the_delivered_column(): void
+    {
+        $this->makeOrder(['status' => 'delivered']);
+        $this->makeOrder(['status' => 'delivered', 'created_at' => now()->subWeek()]);
+
+        // Delivered is a record of what just left, not a queue that grows for ever.
+        $this->getJson('/api/orders/board')->assertOk()->assertJsonCount(1, 'data.columns.delivered');
+    }
+
+    public function test_a_basket_is_found_by_its_barcode_or_its_number(): void
+    {
+        $order = $this->makeOrder();
+
+        $this->getJson("/api/orders/scan/{$order->barcode}")
+            ->assertOk()->assertJsonPath('data.id', $order->getKey());
+
+        $this->getJson("/api/orders/scan/{$order->order_no}")
+            ->assertOk()->assertJsonPath('data.id', $order->getKey());
+
+        $this->getJson('/api/orders/scan/NOT-A-CODE')->assertStatus(404);
+    }
+
+    public function test_a_basket_from_another_branch_cannot_be_scanned(): void
+    {
+        [, $otherBranch] = $this->createTenant();
+        $foreign = Order::factory()->create([
+            'organization_id' => $otherBranch->organization_id,
+            'branch_id' => $otherBranch->getKey(),
+            'barcode' => 'FOREIGN-1',
+        ]);
+
+        // Out of scope must be indistinguishable from missing.
+        $this->getJson("/api/orders/scan/{$foreign->barcode}")->assertStatus(404);
+    }
+
     private function makeOrder(array $attributes = []): Order
     {
         static $sequence = 0;
