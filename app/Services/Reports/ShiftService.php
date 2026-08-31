@@ -67,7 +67,7 @@ class ShiftService
      *
      * @return array<string, mixed>
      */
-    public function close(Shift $shift, float $actualCash): array
+    public function close(Shift $shift, float $actualCash, ?string $note = null): array
     {
         $summary = $this->summarize($shift);
         $expected = $summary['expected_cash'];
@@ -78,6 +78,7 @@ class ShiftService
             'expected_cash' => $expected,
             'actual_cash' => round($actualCash, 2),
             'variance' => $variance,
+            'note' => $note,
         ])->save();
 
         return $this->summarize($shift->refresh());
@@ -116,6 +117,7 @@ class ShiftService
             'expected_cash' => $shift->closed_at !== null ? round((float) $shift->expected_cash, 2) : $expected,
             'actual_cash' => $shift->actual_cash !== null ? round((float) $shift->actual_cash, 2) : null,
             'variance' => $shift->variance !== null ? round((float) $shift->variance, 2) : null,
+            'note' => $shift->note,
             'orders_count' => $this->ordersCount($shift),
         ];
     }

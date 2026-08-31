@@ -81,6 +81,18 @@ class ShiftApiTest extends TestCase
         $this->getJson('/api/shifts/current')->assertOk()->assertJsonPath('data.open', false);
     }
 
+    public function test_the_closing_note_is_kept_with_the_shift(): void
+    {
+        $this->actingAsCashier();
+        $this->postJson('/api/shifts/open', ['opening_cash' => 50])->assertCreated();
+
+        $this->postJson('/api/shifts/close', ['actual_cash' => 45, 'note' => 'عجز في الدرج'])
+            ->assertOk()
+            ->assertJsonPath('data.note', 'عجز في الدرج');
+
+        $this->getJson('/api/shifts')->assertOk()->assertJsonPath('data.data.0.note', 'عجز في الدرج');
+    }
+
     public function test_closing_without_an_open_shift_is_refused(): void
     {
         $this->actingAsCashier();

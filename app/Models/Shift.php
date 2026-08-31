@@ -26,6 +26,7 @@ class Shift extends BaseModel
         'expected_cash',
         'actual_cash',
         'variance',
+        'note',
     ];
 
     protected $casts = [

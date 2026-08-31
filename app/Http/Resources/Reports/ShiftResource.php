@@ -31,6 +31,8 @@ class ShiftResource extends JsonResource
             'actual_cash' => $this->actual_cash === null ? null : round((float) $this->actual_cash, 2),
             'variance' => $this->variance === null ? null : round((float) $this->variance, 2),
 
+            'note' => $this->note,
+
             'opened_at' => $this->opened_at,
             'closed_at' => $this->closed_at,
         ];

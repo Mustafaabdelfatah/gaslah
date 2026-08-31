@@ -62,6 +62,6 @@ class ShiftController extends TenantController
         $shift = $this->shifts->current($this->staff()->getKey());
         abort_if($shift === null, Response::HTTP_UNPROCESSABLE_ENTITY, __('api.shift_none_open'));
 
-        return successResponse($this->shifts->close($shift, $request->actualCash()), __('api.updated_success'));
+        return successResponse($this->shifts->close($shift, $request->actualCash(), $request->note()), __('api.updated_success'));
     }
 }
