@@ -21,7 +21,11 @@ class AutomationSweeper
 {
     private const CANDIDATES_PER_ORG = 500;
 
-    private const DEFAULT_DELAYS = ['normal' => 180, 'express' => 30];
+    /**
+     * The waits used when a tenant has configured none. Public because the settings
+     * screen must show the delays that are actually in force, not blank fields.
+     */
+    public const DEFAULT_DELAYS = ['normal' => 180, 'express' => 30];
 
     public function __construct(private readonly WaService $wa) {}
 
