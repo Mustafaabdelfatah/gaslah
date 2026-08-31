@@ -41,6 +41,11 @@ class AnalyticsService
         $priorDaily = $this->dailySeries($priorOrders, $prior['days']);
 
         return [
+            // The window the server actually used, which is not always the one asked
+            // for: ReportRangeService clamps anything wider than a year.
+            'from' => $range['from_local']->format('Y-m-d'),
+            'to' => $range['to_inclusive_local']->format('Y-m-d'),
+
             'summary' => [
                 'revenue' => $revenue,
                 'prior_revenue' => $priorRevenue,
