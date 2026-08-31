@@ -119,6 +119,45 @@ class ZatcaApiTest extends TestCase
     | Helper Methods
     |--------------------------------------------------------------------------
     */
+    public function test_the_status_reports_the_chain_and_admits_what_is_not_connected(): void
+    {
+        $this->postJson("/api/orders/{$this->order()->getKey()}/zatca-invoice")->assertCreated();
+
+        $response = $this->getJson('/api/zatca/status')->assertOk();
+
+        $response->assertJsonPath('data.seller.vat_number', '300000000000003')
+            ->assertJsonPath('data.phase_one_ready', true)
+            ->assertJsonPath('data.chain.count', 1)
+            ->assertJsonPath('data.chain.last_icv', 1)
+            // Nothing has been sent to the authority, so nothing claims to have been.
+            ->assertJsonPath('data.chain.reported_count', 0)
+            ->assertJsonPath('data.onboarded', false);
+
+        // The screen must be able to say *why* it is not connected.
+        $this->assertNotEmpty($response->json('data.gaps.onboarding'));
+        $this->assertNotEmpty($response->json('data.gaps.signing'));
+        $this->assertNotEmpty($response->json('data.gaps.reporting'));
+    }
+
+    public function test_the_status_says_phase_one_is_not_ready_without_a_vat_number(): void
+    {
+        $this->organization->update(['vat_number' => null]);
+
+        // No VAT number means no lawful tax invoice — the QR would be meaningless.
+        $this->getJson('/api/zatca/status')
+            ->assertOk()
+            ->assertJsonPath('data.phase_one_ready', false)
+            ->assertJsonPath('data.seller.vat_number', null);
+    }
+
+    public function test_a_cashier_cannot_read_the_compliance_position(): void
+    {
+        $this->app['auth']->forgetGuards();
+        $this->actingAsStaff($this->createStaff($this->branch, StaffRoleEnum::Cashier));
+
+        $this->getJson('/api/zatca/status')->assertStatus(403);
+    }
+
     private function order(): Order
     {
         $order = Order::factory()->create([

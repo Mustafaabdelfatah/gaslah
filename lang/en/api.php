@@ -395,4 +395,7 @@ return [
     'branch_code_taken' => 'That branch code is already in use.',
     'branch_last_active' => 'The last active branch cannot be closed.',
     'organization_payroll_note' => 'Declared salaries are counted at organization level, because a person may work in more than one branch.',
+    'zatca_gap_onboarding' => 'Linking to the authority needs a signing certificate (CSID) issued through the Fatoora portal behind a one-time code — not enabled yet.',
+    'zatca_gap_signing' => 'The XAdES signature is not embedded in the invoice, because it needs the signing certificate.',
+    'zatca_gap_reporting' => 'Reporting and clearing invoices with the authority is not enabled yet.',
 ];

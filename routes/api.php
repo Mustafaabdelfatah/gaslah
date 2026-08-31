@@ -407,6 +407,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('{order}/zatca-invoice', [ZatcaPhase2Controller::class, 'show']);
     });
 
+    // Where the organization stands on e-invoicing. Manager-gated: it is a compliance
+    // position, not a counter's concern.
+    Route::get('zatca/status', [ZatcaController::class, 'status'])->middleware('tenant:manager');
+
     /*
     |--------------------------------------------------------------------------
     | Gaslah — Customer Subscriptions (staff, feature: subscriptions)
