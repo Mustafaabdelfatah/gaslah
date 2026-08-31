@@ -4,6 +4,8 @@ namespace Tests\Feature\Platform;
 
 use App\Enum\Tenancy\PlatformPermissionEnum;
 use App\Enum\Tenancy\PlatformRoleEnum;
+use App\Enum\Tenancy\StaffRoleEnum;
+use App\Models\Branch;
 use App\Models\JournalEntry;
 use App\Models\JournalLine;
 use App\Models\Organization;
@@ -166,6 +168,43 @@ class SubscriptionInvoiceApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.data.total', 1)
             ->assertJsonPath('data.data.data.0.status', 'draft');
+    }
+
+    public function test_a_tenant_sees_only_its_own_issued_invoices(): void
+    {
+        $plan = PlatformPlan::factory()->create(['name' => 'Pro', 'monthly_price' => 115]);
+        Sanctum::actingAs($this->owner());
+
+        $draft = fn (int $organizationId) => $this->postJson("/api/admin/tenants/{$organizationId}/invoices", [
+            'plan_id' => $plan->getKey(), 'payment_method' => 'cash',
+        ])->json('data.id');
+
+        $issued = $draft($this->organization->getKey());
+        $draft($this->organization->getKey());
+        $this->postJson("/api/admin/invoices/{$issued}/confirm")->assertOk();
+
+        // Another tenant's issued invoice must not appear on this one's screen.
+        [$other, $otherBranch] = $this->createTenant();
+        $foreign = $draft($other->getKey());
+        $this->postJson("/api/admin/invoices/{$foreign}/confirm")->assertOk();
+
+        $this->app['auth']->forgetGuards();
+        $this->actingAsStaff($this->createStaff(
+            Branch::query()->where('organization_id', $this->organization->getKey())->firstOrFail(),
+            StaffRoleEnum::SuperAdmin,
+        ));
+
+        $response = $this->getJson('/api/org/subscription')->assertOk();
+
+        // The draft is the platform's working document, not a bill anybody owes.
+        $response->assertJsonCount(1, 'data.invoices')
+            ->assertJsonPath('data.invoices.0.id', $issued)
+            ->assertJsonPath('data.invoices.0.status', 'issued');
+
+        // And none of the platform's own chain bookkeeping travels with it.
+        $this->assertArrayNotHasKey('icv', $response->json('data.invoices.0'));
+        $this->assertArrayNotHasKey('seller_vat', $response->json('data.invoices.0'));
+        $this->assertNotNull($otherBranch);
     }
 
     public function test_confirming_needs_the_accounting_permission(): void

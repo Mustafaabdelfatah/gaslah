@@ -25,9 +25,23 @@ class PayoutController extends TenantController
     public function index(): JsonResponse
     {
 
+        $organizationId = $this->organizationId();
+        $balance = $this->payouts->unsettledSummary($organizationId);
+        $fee = $this->payouts->defaultFee($balance['gross']);
+
         return successResponse([
-            'balance' => $this->payouts->unsettledSummary($this->organizationId()),
+            'balance' => [
+                ...$balance,
+                // What the platform would keep, and what would actually land. The
+                // tenant should not be estimating either from a fee schedule.
+                'estimated_fee' => $fee,
+                'estimated_net' => round($balance['gross'] - $fee, 2),
+            ],
+            // A batch already in flight blocks a new one, so the screen can say why
+            // rather than letting the button answer 409.
+            'has_open' => $this->payouts->hasOpenSettlement($organizationId),
             'config' => $this->organization()->payout_config ?? [],
+            'default_days' => $this->payouts->settings()->days ?? [],
         ]);
     }
 

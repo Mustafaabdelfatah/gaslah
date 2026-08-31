@@ -334,7 +334,14 @@ class PayoutService
         return in_array(strtolower($weekday), array_map('strtolower', (array) $days), true);
     }
 
-    private function hasOpenSettlement(int $organizationId): bool
+    /**
+     * Whether a batch is already awaiting approval or transfer.
+     *
+     * Public because the tenant's own screen has to say why the urgent button is
+     * refusing before it is pressed — the guard inside createBatch answers a 409,
+     * which is the wrong moment to learn it.
+     */
+    public function hasOpenSettlement(int $organizationId): bool
     {
         return PayoutSettlement::query()->where('organization_id', $organizationId)->open()->exists();
     }

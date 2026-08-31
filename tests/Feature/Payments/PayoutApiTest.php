@@ -12,6 +12,7 @@ use App\Models\Organization;
 use App\Models\Payment;
 use App\Models\PayoutSettlement;
 use App\Models\User;
+use App\Services\Payments\PayoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -152,6 +153,26 @@ class PayoutApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.balance.gross', 100)
             ->assertJsonPath('data.balance.count', 2);
+    }
+
+    public function test_the_summary_reports_the_fee_and_whether_a_batch_is_already_open(): void
+    {
+        app(PayoutService::class)->saveSettings(['fee_fixed' => 5, 'fee_percent' => 10]);
+        $this->seedPool([60, 40]);
+        $owner = $this->actingAsStaff($this->createStaff($this->branch, StaffRoleEnum::SuperAdmin));
+
+        // The tenant should not be deriving either figure from a fee schedule.
+        $this->getJson('/api/payouts')
+            ->assertOk()
+            ->assertJsonPath('data.balance.estimated_fee', 15)
+            ->assertJsonPath('data.balance.estimated_net', 85)
+            ->assertJsonPath('data.has_open', false);
+
+        app(PayoutService::class)->createBatch($this->organization, $owner->getKey(), null);
+
+        // With a batch in flight the screen can say why, instead of the button
+        // discovering it with a 409.
+        $this->getJson('/api/payouts')->assertOk()->assertJsonPath('data.has_open', true);
     }
 
     /*

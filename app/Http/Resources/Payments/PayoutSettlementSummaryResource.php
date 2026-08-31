@@ -20,11 +20,14 @@ class PayoutSettlementSummaryResource extends JsonResource
             'status' => $this->status,
             'urgent' => (bool) $this->urgent,
 
+            'payment_count' => (int) $this->payment_count,
             'gross_amount' => $this->gross_amount,
             'fee_amount' => $this->fee_amount,
             'net_amount' => $this->net_amount,
 
             'transfer_ref' => $this->transfer_ref,
+            // A tenant whose batch was refused is owed the reason for it.
+            'rejected_reason' => $this->rejected_reason,
             'sent_at' => $this->sent_at,
             'created_at' => $this->created_at,
         ];
