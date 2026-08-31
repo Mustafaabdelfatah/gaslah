@@ -74,6 +74,7 @@ use App\Http\Controllers\API\Tenancy\Messaging\WaController;
 use App\Http\Controllers\API\Tenancy\Orders\AutomationController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
+use App\Http\Controllers\API\Tenancy\OrgUserController;
 use App\Http\Controllers\API\Tenancy\Payments\PayoutController;
 use App\Http\Controllers\API\Tenancy\Platform\OrgNoticeController;
 use App\Http\Controllers\API\Tenancy\Platform\OrgSubscriptionController;
@@ -181,6 +182,21 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('staff/context', StaffContextController::class);
     // Gaslah: the organization's branches, for the header branch switcher.
     Route::get('branches', [BranchController::class, 'index']);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — The organization's own staff (permission: users.manage)
+    |--------------------------------------------------------------------------
+    |
+    | Deactivate rather than delete: an account that took orders stays attributable.
+    */
+    Route::prefix('org/users')->middleware('tenant:permission,users.manage')->group(function () {
+        Route::get('/', [OrgUserController::class, 'index']);
+        Route::get('roles', [OrgUserController::class, 'roles']);
+        Route::post('/', [OrgUserController::class, 'store']);
+        Route::put('{user}', [OrgUserController::class, 'update']);
+        Route::post('{user}/deactivate', [OrgUserController::class, 'deactivate']);
+    });
     Route::post('update-setting', [ProfileController::class, 'updateSetting']);
     Route::post('update-profile', [ProfileController::class, 'updateProfile']);
     Route::post('destroy-avatar', [ProfileController::class, 'destroyAvatar']);
