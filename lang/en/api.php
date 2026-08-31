@@ -392,4 +392,7 @@ return [
     'staff_permission_shifts.manage' => 'Manage shifts',
     'staff_permission_reports.view' => 'View reports',
     'staff_permission_accounting.view' => 'View accounting',
+    'branch_code_taken' => 'That branch code is already in use.',
+    'branch_last_active' => 'The last active branch cannot be closed.',
+    'organization_payroll_note' => 'Declared salaries are counted at organization level, because a person may work in more than one branch.',
 ];

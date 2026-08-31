@@ -83,4 +83,14 @@ class Branch extends BaseModel
         return $this->belongsToMany(User::class, 'user_branches')
             ->withPivot('role');
     }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    public function customers(): HasMany
+    {
+        return $this->hasMany(Customer::class);
+    }
 }

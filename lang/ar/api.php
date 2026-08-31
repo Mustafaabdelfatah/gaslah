@@ -393,4 +393,7 @@ return [
     'staff_permission_shifts.manage' => 'إدارة الورديات',
     'staff_permission_reports.view' => 'عرض التقارير',
     'staff_permission_accounting.view' => 'عرض المحاسبة',
+    'branch_code_taken' => 'رمز الفرع مستخدم بالفعل.',
+    'branch_last_active' => 'لا يمكن إيقاف آخر فرع نشط.',
+    'organization_payroll_note' => 'الرواتب المعلنة تُحسب على مستوى المنشأة، لأن الموظف قد يعمل في أكثر من فرع.',
 ];

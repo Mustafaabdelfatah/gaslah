@@ -74,6 +74,7 @@ use App\Http\Controllers\API\Tenancy\Messaging\WaController;
 use App\Http\Controllers\API\Tenancy\Orders\AutomationController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
+use App\Http\Controllers\API\Tenancy\OrganizationController;
 use App\Http\Controllers\API\Tenancy\OrgUserController;
 use App\Http\Controllers\API\Tenancy\Payments\PayoutController;
 use App\Http\Controllers\API\Tenancy\Platform\OrgNoticeController;
@@ -190,6 +191,29 @@ Route::middleware(['auth:sanctum'])->group(function () {
     |
     | Deactivate rather than delete: an account that took orders stays attributable.
     */
+    /*
+    |--------------------------------------------------------------------------
+    | Gaslah — The organization as a business (manager)
+    |--------------------------------------------------------------------------
+    |
+    | Branch and staff performance, read across the whole organization: comparing
+    | branches is the point, so the current-branch narrowing does not apply here.
+    | Declaring a salary is the general manager's alone.
+    */
+    Route::prefix('organization')->middleware('tenant:manager')->group(function () {
+        Route::get('branches', [OrganizationController::class, 'branches']);
+        Route::get('performance/branches', [OrganizationController::class, 'branchPerformance']);
+        Route::get('performance/employees', [OrganizationController::class, 'employeePerformance']);
+        Route::get('costs', [OrganizationController::class, 'costs']);
+
+        Route::middleware('tenant:super_admin')->group(function () {
+            Route::post('branches', [OrganizationController::class, 'storeBranch']);
+            Route::patch('branches/{branch}', [OrganizationController::class, 'updateBranch']);
+            Route::put('employees/{user}/cost', [OrganizationController::class, 'setEmployeeCost']);
+            Route::delete('employees/{user}/cost', [OrganizationController::class, 'clearEmployeeCost']);
+        });
+    });
+
     Route::prefix('org/users')->middleware('tenant:permission,users.manage')->group(function () {
         Route::get('/', [OrgUserController::class, 'index']);
         Route::get('roles', [OrgUserController::class, 'roles']);
