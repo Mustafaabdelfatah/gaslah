@@ -18,6 +18,18 @@ class AccountingReportController extends TenantController
         parent::__construct();
     }
 
+    public function overview(ReportFilterRequest $request): JsonResponse
+    {
+
+        return successResponse($this->reports->overview($this->organizationId(), $request->toFilter()));
+    }
+
+    public function receivables(): JsonResponse
+    {
+
+        return successResponse($this->reports->receivables($this->organizationId(), $this->readBranchIds()));
+    }
+
     public function trialBalance(ReportFilterRequest $request): JsonResponse
     {
 

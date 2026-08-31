@@ -50,6 +50,7 @@ use App\Http\Controllers\API\Tenancy\Accounting\AccountController;
 use App\Http\Controllers\API\Tenancy\Accounting\AccountingReportController;
 use App\Http\Controllers\API\Tenancy\Accounting\AssetController;
 use App\Http\Controllers\API\Tenancy\Accounting\BooksLockController;
+use App\Http\Controllers\API\Tenancy\Accounting\BudgetController;
 use App\Http\Controllers\API\Tenancy\Accounting\ExpenseController;
 use App\Http\Controllers\API\Tenancy\Accounting\JournalController;
 use App\Http\Controllers\API\Tenancy\Audit\AuditController;
@@ -264,6 +265,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('journal/{journal}/reverse', [JournalController::class, 'reverse']);
 
         // Reports
+        Route::get('overview', [AccountingReportController::class, 'overview']);
+        Route::get('receivables', [AccountingReportController::class, 'receivables']);
         Route::get('trial-balance', [AccountingReportController::class, 'trialBalance']);
         Route::get('income-statement', [AccountingReportController::class, 'incomeStatement']);
         Route::get('balance-sheet', [AccountingReportController::class, 'balanceSheet']);
@@ -274,6 +277,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('expenses', [ExpenseController::class, 'index']);
         Route::post('expenses', [ExpenseController::class, 'store']);
         Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy']);
+
+        // Budgets — planning only, so nothing here reaches the ledger.
+        Route::get('budgets', [BudgetController::class, 'index']);
+        Route::post('budgets', [BudgetController::class, 'store']);
+        Route::put('budgets/{budget}', [BudgetController::class, 'update']);
+        Route::delete('budgets/{budget}', [BudgetController::class, 'destroy']);
 
         // Period lock — reading it is a manager's business, moving it is the owner's,
         // since reopening closed books can rewrite a filed period.

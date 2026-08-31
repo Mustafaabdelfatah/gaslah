@@ -4,7 +4,9 @@ namespace App\Services\Accounting;
 
 use App\Enum\Accounting\AccountTypeEnum;
 use App\Enum\Accounting\SystemAccountEnum;
+use App\Enum\Orders\PaymentStatusEnum;
 use App\Models\Account;
+use App\Models\Order;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -98,6 +100,137 @@ class AccountingReportService
             'total_expenses' => $totalExpenses,
             'net_income' => round($totalRevenue - $totalExpenses, 2),
         ];
+    }
+
+    /**
+     * The accounting landing figures in one call.
+     *
+     * Positions (cash, bank, receivables, VAT owed) are cumulative to the end of
+     * the period, because what the tenant holds is a running total; revenue and
+     * expenses are the period's own movement. Mixing the two in one payload is
+     * what the screen actually shows, so it is settled here rather than left to
+     * the caller to assemble from three reports.
+     *
+     * `bank` is null when the tenant never opened a bank account, which lets the
+     * screen fold it into the cash tile instead of showing a hollow zero.
+     *
+     * @param  array<string, mixed>  $filter
+     * @return array<string, mixed>
+     */
+    public function overview(int $organizationId, array $filter = []): array
+    {
+        $cumulative = $this->balancesByAccount(
+            $organizationId,
+            ['to' => $filter['to'] ?? null, 'branch_id' => $filter['branch_id'] ?? null],
+            cumulative: true,
+            includeZero: true,
+        )->keyBy(fn (array $row) => $row['account']->system_key);
+
+        $income = $this->incomeStatement($organizationId, $filter);
+
+        // "No bank" means nothing was ever booked to it, not that the account is
+        // missing — the default chart always creates one.
+        $bankRow = $cumulative->get(SystemAccountEnum::Bank->value);
+        $hasBank = $bankRow !== null && ($bankRow['debit'] !== 0.0 || $bankRow['credit'] !== 0.0);
+
+        return [
+            'cash' => $this->netMovement($cumulative, SystemAccountEnum::Cash, credit: false),
+            'bank' => $hasBank ? $this->netMovement($cumulative, SystemAccountEnum::Bank, credit: false) : null,
+            'receivable' => $this->netMovement($cumulative, SystemAccountEnum::AccountsReceivable, credit: false),
+            'payable' => $this->netMovement($cumulative, SystemAccountEnum::AccountsPayable, credit: true),
+            'vat_payable' => round(
+                $this->netMovement($cumulative, SystemAccountEnum::VatPayable, credit: true)
+                - $this->netMovement($cumulative, SystemAccountEnum::InputVat, credit: false),
+                2,
+            ),
+            'revenue' => $income['total_revenue'],
+            'expenses' => $income['total_expenses'],
+            'net_income' => $income['net_income'],
+        ];
+    }
+
+    /**
+     * Who owes the tenant money, aged.
+     *
+     * The ledger's receivables account gives one number; collecting needs the
+     * names behind it, so this is built from the orders themselves — every
+     * order still carrying a balance, grouped by customer and bucketed by how
+     * long the oldest of their unpaid orders has been outstanding.
+     *
+     * @param  array<int, int>  $branchIds
+     * @return array<string, mixed>
+     */
+    public function receivables(int $organizationId, array $branchIds = []): array
+    {
+        $today = Carbon::now()->startOfDay();
+
+        $orders = Order::query()
+            ->where('organization_id', $organizationId)
+            ->when($branchIds !== [], fn ($q) => $q->whereIn('branch_id', $branchIds))
+            ->whereIn('payment_status', [
+                PaymentStatusEnum::Unpaid->value,
+                PaymentStatusEnum::Partial->value,
+                PaymentStatusEnum::Deferred->value,
+            ])
+            ->whereRaw('grand_total > paid_total')
+            ->with('customer:id,name,phone')
+            ->get();
+
+        $buckets = ['current' => 0.0, 'd30' => 0.0, 'd60' => 0.0, 'd90' => 0.0];
+
+        $customers = $orders
+            ->groupBy('customer_id')
+            ->map(function ($rows) use ($today, &$buckets) {
+                $due = 0.0;
+                $oldestDays = 0;
+
+                foreach ($rows as $order) {
+                    $remaining = round((float) $order->grand_total - (float) $order->paid_total, 2);
+                    // Oldest-first direction: the debt's own date up to today.
+                    $days = (int) Carbon::parse($order->created_at)->startOfDay()->diffInDays($today);
+                    $due += $remaining;
+                    $oldestDays = max($oldestDays, $days);
+
+                    $buckets[$this->agingBucket($days)] += $remaining;
+                }
+
+                $first = $rows->first();
+
+                return [
+                    'customer' => [
+                        'id' => $first->customer?->id,
+                        'name' => $first->customer?->name,
+                        'phone' => $first->customer?->phone,
+                    ],
+                    'orders_count' => $rows->count(),
+                    'due' => round($due, 2),
+                    'oldest_days' => $oldestDays,
+                    'bucket' => $this->agingBucket($oldestDays),
+                ];
+            })
+            ->sortByDesc('due')
+            ->values()
+            ->all();
+
+        return [
+            'as_of' => $today->toDateString(),
+            'total' => round(array_sum(array_column($customers, 'due')), 2),
+            'buckets' => array_map(fn (float $v) => round($v, 2), $buckets),
+            'customers' => $customers,
+        ];
+    }
+
+    /**
+     * Which aging bucket a debt that is $days old belongs to.
+     */
+    private function agingBucket(int $days): string
+    {
+        return match (true) {
+            $days <= 30 => 'current',
+            $days <= 60 => 'd30',
+            $days <= 90 => 'd60',
+            default => 'd90',
+        };
     }
 
     /**

@@ -3,14 +3,18 @@
 namespace Tests\Feature\Accounting;
 
 use App\Enum\Accounting\SystemAccountEnum;
+use App\Enum\Orders\PaymentStatusEnum;
 use App\Enum\Tenancy\StaffRoleEnum;
 use App\Models\Account;
 use App\Models\Branch;
+use App\Models\Customer;
 use App\Models\JournalEntry;
+use App\Models\Order;
 use App\Models\Organization;
 use App\Models\User;
 use Database\Seeders\FeatureSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class AccountingApiTest extends TestCase
@@ -114,6 +118,69 @@ class AccountingApiTest extends TestCase
         $this->getJson('/api/accounting/trial-balance')
             ->assertOk()
             ->assertJsonPath('data.balanced', true);
+    }
+
+    public function test_the_overview_carries_cumulative_positions_and_period_movement(): void
+    {
+        $this->actingAsManager();
+        $this->getJson('/api/accounting/accounts');
+        $cash = $this->systemAccount(SystemAccountEnum::Cash);
+        $capital = $this->systemAccount(SystemAccountEnum::Capital);
+
+        $this->postJson('/api/accounting/journal', [
+            'lines' => [
+                ['account_id' => $cash, 'debit' => 5000],
+                ['account_id' => $capital, 'credit' => 5000],
+            ],
+        ])->assertCreated();
+
+        $response = $this->getJson('/api/accounting/overview')->assertOk();
+
+        // Capital is neither revenue nor expense, so only the cash position moves.
+        $response->assertJsonPath('data.cash', 5000)
+            ->assertJsonPath('data.revenue', 0)
+            ->assertJsonPath('data.expenses', 0)
+            ->assertJsonPath('data.net_income', 0);
+
+        // Nothing was ever booked to the bank account, so it reads as absent.
+        $this->assertNull($response->json('data.bank'));
+    }
+
+    public function test_receivables_age_each_customer_by_their_oldest_unpaid_order(): void
+    {
+        $this->actingAsManager();
+        $customer = Customer::factory()->create(['organization_id' => $this->organization->getKey()]);
+
+        // Two debts of the same customer, one fresh and one long overdue.
+        Order::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+            'customer_id' => $customer->getKey(),
+            'grand_total' => 100,
+            'paid_total' => 40,
+            'payment_status' => PaymentStatusEnum::Partial->value,
+            'created_at' => Carbon::now()->subDays(5),
+        ]);
+        Order::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+            'customer_id' => $customer->getKey(),
+            'grand_total' => 200,
+            'paid_total' => 0,
+            'payment_status' => PaymentStatusEnum::Unpaid->value,
+            'created_at' => Carbon::now()->subDays(95),
+        ]);
+
+        $response = $this->getJson('/api/accounting/receivables')->assertOk();
+
+        $response->assertJsonPath('data.total', 260)
+            // Each order lands in its own bucket…
+            ->assertJsonPath('data.buckets.current', 60)
+            ->assertJsonPath('data.buckets.d90', 200)
+            // …while the customer row is aged by their oldest debt.
+            ->assertJsonPath('data.customers.0.due', 260)
+            ->assertJsonPath('data.customers.0.orders_count', 2)
+            ->assertJsonPath('data.customers.0.bucket', 'd90');
     }
 
     public function test_a_manager_can_record_an_expense_and_it_posts(): void
