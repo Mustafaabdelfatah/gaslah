@@ -81,6 +81,42 @@ class ForumApiTest extends TestCase
         $this->getJson('/api/community')->assertOk()->assertJsonCount(1, 'data.my_threads');
     }
 
+    public function test_the_thread_detail_carries_the_body_and_its_replies(): void
+    {
+        $thread = $this->approvedThread();
+        $this->postJson("/api/forum/threads/{$thread->getKey()}/posts", ['body' => 'رد مفيد'])->assertCreated();
+
+        $response = $this->getJson("/api/forum/threads/{$thread->getKey()}")->assertOk();
+
+        $response->assertJsonPath('data.body', 'نص')
+            ->assertJsonCount(1, 'data.replies')
+            ->assertJsonPath('data.replies.0.body', 'رد مفيد')
+            // The author is a name on the thread and on every reply. The listing says the
+            // same thing the same way, so a client can render both from one shape.
+            ->assertJsonPath('data.author', $this->currentUser()->name)
+            ->assertJsonPath('data.replies.0.author', $this->currentUser()->name);
+    }
+
+    public function test_the_listing_ships_no_bodies(): void
+    {
+        $this->approvedThread();
+
+        $row = $this->getJson('/api/forum/threads')->assertOk()->json('data.data.0');
+
+        // A hundred threads must not mean a hundred full posts on the wire.
+        $this->assertArrayNotHasKey('body', $row);
+        $this->assertArrayNotHasKey('replies', $row);
+        $this->assertSame($this->currentUser()->name, $row['author']);
+    }
+
+    public function test_a_pending_thread_cannot_be_opened(): void
+    {
+        $pending = $this->approvedThread(['status' => ForumStatusEnum::Pending->value]);
+
+        // Moderation is not a soft hint: an unapproved thread does not exist to a reader.
+        $this->getJson("/api/forum/threads/{$pending->getKey()}")->assertStatus(404);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Helper Methods

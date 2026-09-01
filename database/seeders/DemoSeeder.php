@@ -2,18 +2,26 @@
 
 namespace Database\Seeders;
 
+use App\Enum\Forum\ForumStatusEnum;
+use App\Enum\Support\SupportPriorityEnum;
 use App\Enum\Tenancy\PlatformRoleEnum;
 use App\Models\Branch;
 use App\Models\Customer;
+use App\Models\ForumCategory;
+use App\Models\ForumPost;
+use App\Models\ForumThread;
 use App\Models\Organization;
+use App\Models\OrgAnnouncement;
 use App\Models\Product;
 use App\Models\User;
 use App\Services\Accounting\ChartOfAccountsService;
 use App\Services\Catalog\CatalogService;
 use App\Services\Orders\PosService;
 use App\Services\Platform\TenantProvisioner;
+use App\Services\Support\SupportTicketService;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Carbon;
 
 /**
  * A realistic demo tenant modelled on the real laundry data: "مغاسل النقاء", with an
@@ -119,6 +127,7 @@ class DemoSeeder extends Seeder
         $products = $this->seedCatalog($organization);
         $customers = $this->seedCustomers($organization, $mainBranch);
         $this->seedOrders($organization, $mainBranch, $admin, $customers, $products);
+        $this->seedCommunity($organization, $admin);
 
         $this->report($organization, $admin, [$mainBranch, $northBranch]);
     }
@@ -255,6 +264,73 @@ class DemoSeeder extends Seeder
 
             $pos->postAccounting($order);
         }
+    }
+
+    /**
+     * The community surfaces: the platform-wide forum, the shop's own announcements, and
+     * one open support ticket — enough for each screen to be judged with real content
+     * rather than an empty state.
+     */
+    private function seedCommunity(Organization $organization, User $admin): void
+    {
+        $categories = collect([
+            ['name' => 'تشغيل المغسلة', 'slug' => 'operations', 'sort_order' => 1],
+            ['name' => 'التسعير والعروض', 'slug' => 'pricing', 'sort_order' => 2],
+            ['name' => 'المعدّات والصيانة', 'slug' => 'equipment', 'sort_order' => 3],
+        ])->map(fn (array $row) => ForumCategory::query()->firstOrCreate(
+            ['slug' => $row['slug']],
+            [...$row, 'is_active' => true],
+        ));
+
+        $now = Carbon::now();
+
+        // An approved thread with a reply: the board has something to read.
+        $approved = ForumThread::query()->create([
+            'organization_id' => $organization->getKey(),
+            'category_id' => $categories[1]->getKey(),
+            'title' => 'كم تحسبون سعر كي الثوب في الفترة المسائية؟',
+            'slug' => 'سعر-كي-الثوب-مساءً',
+            'body' => 'عندنا ضغط بعد المغرب والأسعار ثابتة طول اليوم. هل أحد جرّب سعر مختلف للفترة المسائية؟',
+            'author_id' => $admin->getKey(),
+            'status' => ForumStatusEnum::Approved->value,
+            'reply_count' => 1,
+            'view_count' => 34,
+            'last_activity_at' => $now,
+        ]);
+
+        ForumPost::query()->create([
+            'thread_id' => $approved->getKey(),
+            'author_id' => $admin->getKey(),
+            'body' => 'جرّبناها كرسوم استعجال بدل تغيير السعر الأساسي — أوضح للعميل وأسهل في المحاسبة.',
+            'status' => ForumStatusEnum::Approved->value,
+        ]);
+
+        // And one still in the moderation queue, so the community screen shows both badges.
+        ForumThread::query()->create([
+            'organization_id' => $organization->getKey(),
+            'category_id' => $categories[2]->getKey(),
+            'title' => 'صيانة المكواة البخارية كل كم شهر؟',
+            'slug' => 'صيانة-المكواة-البخارية',
+            'body' => 'المكواة عندنا شغالة من سنة بدون صيانة. كم المدة المعقولة قبل أول صيانة؟',
+            'author_id' => $admin->getKey(),
+            'status' => ForumStatusEnum::Pending->value,
+            'last_activity_at' => $now,
+        ]);
+
+        OrgAnnouncement::query()->create([
+            'organization_id' => $organization->getKey(),
+            'title' => 'خصم 20% على كي الثياب',
+            'body' => 'خصم 20% على كي الثياب طوال شهر رمضان، لجميع الفروع.',
+            'is_active' => true,
+        ]);
+
+        app(SupportTicketService::class)->open(
+            $organization,
+            $admin,
+            'الفاتورة الإلكترونية لا تظهر رمز QR',
+            'الطلبات الأخيرة تطبع بدون رمز الاستجابة السريعة. هل ينقصنا إعداد في صفحة الفوترة الإلكترونية؟',
+            SupportPriorityEnum::High,
+        );
     }
 
     /**

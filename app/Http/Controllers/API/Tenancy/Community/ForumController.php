@@ -6,6 +6,7 @@ use App\Enum\Forum\ForumStatusEnum;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Community\StoreForumPostRequest;
 use App\Http\Requests\Community\StoreForumThreadRequest;
+use App\Http\Resources\Community\ForumPostResource;
 use App\Http\Resources\Community\ForumThreadResource;
 use App\Models\ForumCategory;
 use App\Models\ForumPost;
@@ -55,7 +56,7 @@ class ForumController extends TenantController
             'posts' => fn ($q) => $q->where('status', ForumStatusEnum::Approved->value)->with('author:id,name')->orderBy('id'),
         ]);
 
-        return successResponse($thread);
+        return successResponse((new ForumThreadResource($thread))->asDetail());
     }
 
     public function storeThread(StoreForumThreadRequest $request): JsonResponse
@@ -79,7 +80,7 @@ class ForumController extends TenantController
             'last_activity_at' => Carbon::now(),
         ]);
 
-        return successResponse($thread, __('api.forum_thread_pending'), 201);
+        return successResponse(new ForumThreadResource($thread), __('api.forum_thread_pending'), 201);
     }
 
     public function storePost(StoreForumPostRequest $request, ForumThread $thread): JsonResponse
@@ -99,7 +100,7 @@ class ForumController extends TenantController
         $thread->increment('reply_count');
         $thread->forceFill(['last_activity_at' => Carbon::now()])->save();
 
-        return successResponse($post->load('author:id,name'), __('api.created_success'), 201);
+        return successResponse(new ForumPostResource($post->load('author:id,name')), __('api.created_success'), 201);
     }
 
     /**
