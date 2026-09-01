@@ -24,6 +24,7 @@ use App\Http\Controllers\API\Market\SupplierPortalController;
 use App\Http\Controllers\API\Messaging\WaWebhookController;
 use App\Http\Controllers\API\Payments\PayController;
 use App\Http\Controllers\API\Platform\AdminAnnouncementController;
+use App\Http\Controllers\API\Platform\AdminBlogController;
 use App\Http\Controllers\API\Platform\AdminConfigController;
 use App\Http\Controllers\API\Platform\AdminCouponController;
 use App\Http\Controllers\API\Platform\AdminCrmController;
@@ -56,6 +57,7 @@ use App\Http\Controllers\API\Tenancy\Accounting\JournalController;
 use App\Http\Controllers\API\Tenancy\Audit\AuditController;
 use App\Http\Controllers\API\Tenancy\Auth\PlatformLoginController;
 use App\Http\Controllers\API\Tenancy\Auth\StaffLoginController;
+use App\Http\Controllers\API\Tenancy\Blog\BlogController;
 use App\Http\Controllers\API\Tenancy\BranchController;
 use App\Http\Controllers\API\Tenancy\Catalog\CatalogController;
 use App\Http\Controllers\API\Tenancy\Catalog\CustomerController;
@@ -566,6 +568,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('threads/{thread}/posts', [ForumController::class, 'storePost']);
     });
 
+    // The platform's own publication: one set of articles every tenant reads.
+    Route::prefix('blog')->group(function () {
+        Route::get('categories', [BlogController::class, 'categories']);
+        Route::get('posts', [BlogController::class, 'index']);
+        Route::get('posts/{slug}', [BlogController::class, 'show']);
+    });
+
     // Organization announcements (portal carousel; writes manager-gated).
     Route::prefix('announcements')->group(function () {
         Route::get('/', [OrgAnnouncementController::class, 'index']);
@@ -720,6 +729,16 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
         Route::delete('delete', [AdminAnnouncementController::class, 'destroy']);
         Route::put('toggle-active', [AdminAnnouncementController::class, 'toggleActive']);
         Route::apiResource('/', AdminAnnouncementController::class)->parameters(['' => 'announcement'])->except(['destroy']);
+    });
+
+    // The blog desk. Marketing content, so it rides the marketing permission.
+    Route::prefix('blog')->middleware('platform.permission:manage_marketing')->group(function () {
+        Route::get('posts', [AdminBlogController::class, 'index']);
+        Route::get('posts/{post}', [AdminBlogController::class, 'show']);
+        Route::post('posts', [AdminBlogController::class, 'store']);
+        Route::put('posts/{post}', [AdminBlogController::class, 'update']);
+        Route::post('posts/{post}/archive', [AdminBlogController::class, 'archive']);
+        Route::post('categories', [AdminBlogController::class, 'storeCategory']);
     });
 
     Route::prefix('tenants')->middleware('platform.permission:manage_tenants')->group(function () {

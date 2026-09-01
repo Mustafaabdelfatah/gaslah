@@ -2,9 +2,12 @@
 
 namespace Database\Seeders;
 
+use App\Enum\Blog\BlogPostStatusEnum;
 use App\Enum\Forum\ForumStatusEnum;
 use App\Enum\Support\SupportPriorityEnum;
 use App\Enum\Tenancy\PlatformRoleEnum;
+use App\Models\BlogCategory;
+use App\Models\BlogPost;
 use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\ForumCategory;
@@ -128,6 +131,7 @@ class DemoSeeder extends Seeder
         $customers = $this->seedCustomers($organization, $mainBranch);
         $this->seedOrders($organization, $mainBranch, $admin, $customers, $products);
         $this->seedCommunity($organization, $admin);
+        $this->seedBlog($admin);
 
         $this->report($organization, $admin, [$mainBranch, $northBranch]);
     }
@@ -331,6 +335,60 @@ class DemoSeeder extends Seeder
             'الطلبات الأخيرة تطبع بدون رمز الاستجابة السريعة. هل ينقصنا إعداد في صفحة الفوترة الإلكترونية؟',
             SupportPriorityEnum::High,
         );
+    }
+
+    /**
+     * A published article and a draft, so the blog and the operator's desk both have
+     * something real to show. The body exercises the reader's markdown: a heading, a
+     * list and a link.
+     */
+    private function seedBlog(User $admin): void
+    {
+        $guides = BlogCategory::query()->firstOrCreate(
+            ['slug' => 'adilla'],
+            ['name' => 'أدلة التشغيل', 'sort_order' => 1, 'is_active' => true],
+        );
+
+        BlogPost::query()->create([
+            'category_id' => $guides->getKey(),
+            'title' => 'خمس عادات تقلّل الطلبات المتأخرة في مغسلتك',
+            'slug' => 'خمس-عادات-تقلل-الطلبات-المتأخرة',
+            'excerpt' => 'التأخير نادراً ما يكون بسبب الماكينات. خمس عادات يومية تقلّله بلا تكلفة إضافية.',
+            'content' => <<<'MD'
+التأخير في المغسلة نادراً ما يكون بسبب الماكينات. في أغلب الحالات يكون بسبب ترتيب اليوم.
+
+## ابدأ بالجرد لا بالغسيل
+
+أول نصف ساعة في اليوم للجرد: كم طلب مستحق اليوم، وكم منها لم يبدأ بعد.
+
+- افصل الطلبات المستعجلة قبل أي شيء
+- اكتب موعد التسليم على الكيس نفسه
+- لا تبدأ دفعة جديدة قبل إغلاق التي قبلها
+
+## اقفل الاستلام قبل ساعة من الإغلاق
+
+الطلب الذي يدخل قبل الإغلاق بعشر دقائق يتأخر غالباً. اجعل آخر ساعة للتسليم فقط.
+
+> القاعدة البسيطة: لا تعد بموعد قبل أن ترى القطعة.
+
+تابع بقية الأدلة في [المدوّنة](/blog).
+MD,
+            'tags' => ['تشغيل', 'جودة'],
+            'status' => BlogPostStatusEnum::Published->value,
+            'published_at' => Carbon::now()->subDays(3),
+            'created_by_id' => $admin->getKey(),
+        ]);
+
+        BlogPost::query()->create([
+            'category_id' => $guides->getKey(),
+            'title' => 'كيف تسعّر خدمة الاستعجال بلا خسارة',
+            'slug' => 'تسعير-خدمة-الاستعجال',
+            'excerpt' => 'مسوّدة قيد الكتابة.',
+            'content' => 'الاستعجال ليس خدمة إضافية، بل إعادة ترتيب لطابور العمل كله.',
+            'tags' => ['تسعير'],
+            'status' => BlogPostStatusEnum::Draft->value,
+            'created_by_id' => $admin->getKey(),
+        ]);
     }
 
     /**
