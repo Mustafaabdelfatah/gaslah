@@ -5,6 +5,8 @@ namespace Tests\Feature\Catalog;
 use App\Enum\Tenancy\StaffRoleEnum;
 use App\Models\Branch;
 use App\Models\Customer;
+use App\Models\LoyaltyProgram;
+use App\Models\Order;
 use App\Models\Organization;
 use App\Models\Service;
 use App\Models\ServiceCategory;
@@ -255,6 +257,67 @@ class CatalogAndCustomerApiTest extends TestCase
             ->assertJsonPath('data.subscription.usable', true);
     }
 
+    public function test_the_customer_detail_opens_with_their_spend_and_points(): void
+    {
+        $this->actingAsManager();
+        $customer = Customer::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+        ]);
+
+        foreach ([['A-1', 100], ['A-2', 200]] as [$no, $total]) {
+            Order::factory()->create([
+                'organization_id' => $this->organization->getKey(),
+                'branch_id' => $this->branch->getKey(),
+                'customer_id' => $customer->getKey(),
+                'order_no' => $no,
+                'barcode' => 'B'.$no,
+                'grand_total' => $total,
+            ]);
+        }
+        // A reversed visit is not spend.
+        Order::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+            'customer_id' => $customer->getKey(),
+            'order_no' => 'A-3',
+            'barcode' => 'BA-3',
+            'grand_total' => 999,
+            'status' => 'cancelled',
+        ]);
+
+        LoyaltyProgram::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'point_value' => 0.5,
+            'is_active' => true,
+        ]);
+        $this->postJson("/api/loyalty/accounts/{$customer->getKey()}/adjust", ['points' => 20])->assertOk();
+
+        $this->getJson("/api/customers/{$customer->getKey()}")
+            ->assertOk()
+            ->assertJsonPath('data.stats.total_orders', 2)
+            ->assertJsonPath('data.stats.total_spent', 300)
+            ->assertJsonPath('data.stats.avg_basket', 150)
+            ->assertJsonPath('data.loyalty.points', 20)
+            ->assertJsonPath('data.loyalty.value', 10);
+    }
+
+    public function test_no_loyalty_programme_reads_as_zero_points_not_an_error(): void
+    {
+        $this->actingAsManager();
+        $customer = Customer::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+        ]);
+
+        $this->getJson("/api/customers/{$customer->getKey()}")
+            ->assertOk()
+            ->assertJsonPath('data.loyalty.points', 0)
+            ->assertJsonPath('data.loyalty.point_value', 0)
+            ->assertJsonPath('data.stats.total_orders', 0)
+            ->assertJsonPath('data.stats.last_visit', null);
+    }
+
     public function test_the_customer_listing_carries_no_subscription_key(): void
     {
         $this->actingAsManager();
@@ -267,6 +330,8 @@ class CatalogAndCustomerApiTest extends TestCase
         // a null here would read as "no subscription" rather than "not asked".
         $row = $this->getJson('/api/customers')->assertOk()->json('data.data.0');
         $this->assertArrayNotHasKey('subscription', $row);
+        $this->assertArrayNotHasKey('stats', $row);
+        $this->assertArrayNotHasKey('loyalty', $row);
     }
 
     public function test_a_foreign_customer_is_not_visible(): void

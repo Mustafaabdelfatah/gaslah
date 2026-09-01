@@ -7,9 +7,11 @@ use App\Filters\Global\OrderByFilter;
 use App\Filters\Orders\OrderFilter;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Global\Other\PageRequest;
+use App\Http\Requests\Orders\CollectOrderPaymentRequest;
 use App\Http\Requests\Orders\UpdateOrderStatusRequest;
 use App\Http\Resources\Orders\OrderResource;
 use App\Models\Order;
+use App\Services\Orders\OrderCollectionService;
 use App\Services\Orders\OrderStatusService;
 use App\Services\Payments\PayTokenService;
 use Illuminate\Http\JsonResponse;
@@ -143,6 +145,22 @@ class OrderController extends TenantController
     /**
      * Mint a public payment link for an unpaid order.
      */
+    /**
+     * Collect a counter payment on an existing order — the partial settled later, the
+     * deferred debt the customer came back to clear.
+     */
+    public function collectPayment(CollectOrderPaymentRequest $request, Order $order, OrderCollectionService $collections): JsonResponse
+    {
+        $this->assertOwned($order);
+
+        $order = $collections->collect($order, $request->method(), $request->amount(), $request->reference());
+
+        return successResponse(
+            new OrderResource($order->load('items.service:id,name', 'payments', 'customer:id,name,phone')),
+            __('api.updated_success'),
+        );
+    }
+
     public function paymentLink(Order $order): JsonResponse
     {
         $this->assertInReadScope($order);

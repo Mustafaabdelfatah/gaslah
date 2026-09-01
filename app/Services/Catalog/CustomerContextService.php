@@ -1,0 +1,67 @@
+<?php
+
+namespace App\Services\Catalog;
+
+use App\Enum\Orders\OrderStatusEnum;
+use App\Models\Customer;
+use App\Models\LoyaltyAccount;
+use App\Services\Loyalty\LoyaltyService;
+
+/**
+ * The figures the customer page opens with: what this person has spent with the shop,
+ * and what their points are worth. Computed on the single-customer read only — a listing
+ * would pay a query per row for numbers nobody is looking at there.
+ */
+class CustomerContextService
+{
+    public function __construct(private readonly LoyaltyService $loyalty) {}
+
+    /**
+     * @return array{total_orders: int, total_spent: float, avg_basket: float, last_visit: string|null}
+     */
+    public function stats(Customer $customer): array
+    {
+        // Cancelled baskets are excluded everywhere money is summed; a visit that was
+        // reversed is not spend.
+        $row = $customer->orders()
+            ->where('status', '!=', OrderStatusEnum::Cancelled->value)
+            ->selectRaw('COUNT(*) as total_orders, COALESCE(SUM(grand_total), 0) as total_spent, MAX(created_at) as last_visit')
+            ->first();
+
+        $totalOrders = (int) $row->total_orders;
+        $totalSpent = round((float) $row->total_spent, 2);
+
+        return [
+            'total_orders' => $totalOrders,
+            'total_spent' => $totalSpent,
+            'avg_basket' => $totalOrders > 0 ? round($totalSpent / $totalOrders, 2) : 0.0,
+            'last_visit' => $row->last_visit,
+        ];
+    }
+
+    /**
+     * Points and what they convert to. Zeros when the shop runs no programme — the page
+     * renders the card either way, and a missing key would read as an error.
+     *
+     * @return array{points: float, point_value: float, value: float}
+     */
+    public function loyalty(Customer $customer): array
+    {
+        $program = $this->loyalty->resolveProgram($customer->organization_id);
+
+        $points = $program->exists
+            ? (float) LoyaltyAccount::query()
+                ->where('customer_id', $customer->getKey())
+                ->where('program_id', $program->getKey())
+                ->value('points_balance')
+            : 0.0;
+
+        $pointValue = $program->exists ? round((float) $program->point_value, 4) : 0.0;
+
+        return [
+            'points' => round($points, 2),
+            'point_value' => $pointValue,
+            'value' => round($points * $pointValue, 2),
+        ];
+    }
+}

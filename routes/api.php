@@ -401,6 +401,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::patch('{order}/status', [OrderController::class, 'updateStatus']);
         Route::post('{order}/payment-link', [OrderController::class, 'paymentLink'])
             ->middleware('tenant:permission,orders.manage');
+        // Taking money over the counter needs the same gates as the till.
+        Route::post('{order}/payments', [OrderController::class, 'collectPayment'])
+            ->middleware(['tenant:permission,pos.checkout', 'tenant:active']);
 
         // ZATCA e-invoicing: Phase 1 instant QR + Phase 2 stored UBL invoice.
         Route::get('{order}/invoice', [ZatcaController::class, 'invoice']);

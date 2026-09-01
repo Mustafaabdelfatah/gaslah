@@ -11,6 +11,7 @@ use App\Http\Requests\Catalog\WalletTopupRequest;
 use App\Http\Requests\Global\Other\PageRequest;
 use App\Http\Resources\Catalog\CustomerResource;
 use App\Models\Customer;
+use App\Services\Catalog\CustomerContextService;
 use App\Services\Payments\WalletService;
 use App\Services\Subscriptions\SubscriptionConsumptionService;
 use Illuminate\Http\JsonResponse;
@@ -22,6 +23,7 @@ class CustomerController extends TenantController
     public function __construct(
         private readonly WalletService $wallet,
         private readonly SubscriptionConsumptionService $subscriptions,
+        private readonly CustomerContextService $context,
     ) {
         parent::__construct();
     }
@@ -60,10 +62,9 @@ class CustomerController extends TenantController
         $subscription = $this->subscriptions->activeFor($customer)->with('plan')->first();
 
         return successResponse(
-            (new CustomerResource($customer))->withSubscription(
-                $subscription,
-                $this->subscriptions->isUsable($subscription),
-            ),
+            (new CustomerResource($customer))
+                ->withSubscription($subscription, $this->subscriptions->isUsable($subscription))
+                ->withContext($this->context->stats($customer), $this->context->loyalty($customer)),
         );
     }
 

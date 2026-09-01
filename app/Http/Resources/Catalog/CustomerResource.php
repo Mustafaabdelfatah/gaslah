@@ -25,11 +25,32 @@ class CustomerResource extends JsonResource
 
     private bool $subscriptionResolved = false;
 
+    /** @var array<string, mixed>|null */
+    private ?array $stats = null;
+
+    /** @var array<string, mixed>|null */
+    private ?array $loyalty = null;
+
     public function withSubscription(?Subscription $subscription, bool $usable): self
     {
         $this->subscription = $subscription;
         $this->subscriptionUsable = $usable;
         $this->subscriptionResolved = true;
+
+        return $this;
+    }
+
+    /**
+     * The customer-page rollups, same rule as the subscription: only the detail read
+     * carries them, a listing leaves the keys out entirely.
+     *
+     * @param  array<string, mixed>  $stats
+     * @param  array<string, mixed>  $loyalty
+     */
+    public function withContext(array $stats, array $loyalty): self
+    {
+        $this->stats = $stats;
+        $this->loyalty = $loyalty;
 
         return $this;
     }
@@ -64,6 +85,9 @@ class CustomerResource extends JsonResource
                 'end_at' => $this->subscription->end_at,
                 'usable' => $this->subscriptionUsable,
             ]),
+
+            'stats' => $this->when($this->stats !== null, fn () => $this->stats),
+            'loyalty' => $this->when($this->loyalty !== null, fn () => $this->loyalty),
 
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
