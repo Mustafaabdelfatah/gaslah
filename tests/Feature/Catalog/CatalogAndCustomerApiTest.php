@@ -8,6 +8,8 @@ use App\Models\Customer;
 use App\Models\Organization;
 use App\Models\Service;
 use App\Models\ServiceCategory;
+use App\Models\Subscription;
+use App\Models\SubscriptionPlan;
 use App\Services\Accounting\ChartOfAccountsService;
 use Database\Seeders\FeatureSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -212,6 +214,59 @@ class CatalogAndCustomerApiTest extends TestCase
 
         // Catalog writes are manager-gated.
         $this->postJson('/api/catalog/categories', ['name' => 'X'])->assertStatus(403);
+    }
+
+    public function test_the_till_is_told_whether_a_subscription_can_actually_pay(): void
+    {
+        $this->actingAsManager();
+        $customer = Customer::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+        ]);
+
+        // A priced package that was sold but never collected cannot cover an order.
+        $plan = SubscriptionPlan::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'type' => 'piece_quota',
+            'price' => 300,
+            'quota' => 20,
+        ]);
+        $subscription = Subscription::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'customer_id' => $customer->getKey(),
+            'branch_id' => $this->branch->getKey(),
+            'plan_id' => $plan->getKey(),
+            'status' => 'active',
+            'end_at' => now()->addMonth(),
+            'remaining_quota' => 20,
+        ]);
+
+        $this->getJson("/api/customers/{$customer->getKey()}")
+            ->assertOk()
+            ->assertJsonPath('data.subscription.id', $subscription->getKey())
+            // Uncollected: the counter must not raise an OTP for it.
+            ->assertJsonPath('data.subscription.usable', false);
+
+        // A free package needs no collection, so it is usable at once.
+        $plan->update(['price' => 0]);
+
+        $this->getJson("/api/customers/{$customer->getKey()}")
+            ->assertOk()
+            ->assertJsonPath('data.subscription.usable', true);
+    }
+
+    public function test_the_customer_listing_carries_no_subscription_key(): void
+    {
+        $this->actingAsManager();
+        Customer::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+        ]);
+
+        // One query per row would be an N+1 for a figure only the counter needs, and
+        // a null here would read as "no subscription" rather than "not asked".
+        $row = $this->getJson('/api/customers')->assertOk()->json('data.data.0');
+        $this->assertArrayNotHasKey('subscription', $row);
     }
 
     public function test_a_foreign_customer_is_not_visible(): void

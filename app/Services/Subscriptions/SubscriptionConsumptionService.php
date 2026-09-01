@@ -12,6 +12,7 @@ use App\Models\Order;
 use App\Models\Subscription;
 use App\Services\Accounting\ChartOfAccountsService;
 use App\Services\Accounting\JournalPostingService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -33,6 +34,42 @@ class SubscriptionConsumptionService
     ) {}
 
     /**
+     * The subscription a sale would draw from: active, still inside its period, most
+     * recently started.
+     *
+     * Returned as a query so the checkout can take it under a row lock while the till
+     * merely reads it. Both must ask the same question — a counter that offered a
+     * subscription the checkout then refuses would have the customer approve a charge
+     * that was never going to work.
+     */
+    public function activeFor(Customer $customer): Builder
+    {
+        return Subscription::query()
+            ->where('customer_id', $customer->getKey())
+            ->where('status', SubscriptionStatusEnum::Active->value)
+            ->where(fn ($query) => $query->whereNull('end_at')->orWhere('end_at', '>=', Carbon::now()))
+            ->orderByDesc('start_at');
+    }
+
+    /**
+     * Whether that subscription can actually pay for something today.
+     *
+     * A priced plan sold but never collected cannot cover an order, which is the
+     * distinction the till has to draw before raising an OTP.
+     */
+    public function isUsable(?Subscription $subscription): bool
+    {
+        if ($subscription === null) {
+            return false;
+        }
+
+        $plan = $subscription->plan;
+
+        return $plan !== null
+            && ((float) $plan->price <= 0 || $this->subscriptions->isPaid($subscription));
+    }
+
+    /**
      * Draw the order's cost from the customer's subscription and mark it paid.
      *
      * Must run inside the order-creation transaction so the lock and the ledger post
@@ -40,13 +77,7 @@ class SubscriptionConsumptionService
      */
     public function consume(Order $order, Customer $customer): void
     {
-        $subscription = Subscription::query()
-            ->where('customer_id', $customer->getKey())
-            ->where('status', SubscriptionStatusEnum::Active->value)
-            ->where(fn ($query) => $query->whereNull('end_at')->orWhere('end_at', '>=', Carbon::now()))
-            ->orderByDesc('start_at')
-            ->lockForUpdate()
-            ->first();
+        $subscription = $this->activeFor($customer)->lockForUpdate()->first();
 
         abort_if($subscription === null, Response::HTTP_UNPROCESSABLE_ENTITY, __('api.no_active_subscription'));
 

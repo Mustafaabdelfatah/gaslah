@@ -12,14 +12,17 @@ use App\Http\Requests\Global\Other\PageRequest;
 use App\Http\Resources\Catalog\CustomerResource;
 use App\Models\Customer;
 use App\Services\Payments\WalletService;
+use App\Services\Subscriptions\SubscriptionConsumptionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pipeline\Pipeline;
 use Symfony\Component\HttpFoundation\Response;
 
 class CustomerController extends TenantController
 {
-    public function __construct(private readonly WalletService $wallet)
-    {
+    public function __construct(
+        private readonly WalletService $wallet,
+        private readonly SubscriptionConsumptionService $subscriptions,
+    ) {
         parent::__construct();
     }
 
@@ -50,7 +53,18 @@ class CustomerController extends TenantController
     {
         $this->assertOwned($customer);
 
-        return successResponse(new CustomerResource($customer));
+        // The till reads this to decide whether it may offer a subscription payment,
+        // so the answer travels with the customer rather than being guessed. It is
+        // deliberately not on the listing: one query per row would be an N+1 for a
+        // figure only the counter needs.
+        $subscription = $this->subscriptions->activeFor($customer)->with('plan')->first();
+
+        return successResponse(
+            (new CustomerResource($customer))->withSubscription(
+                $subscription,
+                $this->subscriptions->isUsable($subscription),
+            ),
+        );
     }
 
     public function update(CustomerRequest $request, Customer $customer): JsonResponse
