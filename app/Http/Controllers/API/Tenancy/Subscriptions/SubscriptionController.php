@@ -11,6 +11,7 @@ use App\Models\Customer;
 use App\Models\Subscription;
 use App\Services\Subscriptions\SubscriptionService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Pagination\AbstractPaginator;
 
 class SubscriptionController extends TenantController
 {
@@ -31,7 +32,23 @@ class SubscriptionController extends TenantController
             ->when($request->filled('customer_id'), fn ($q) => $q->where('customer_id', $request->input('customer_id')))
             ->orderByDesc('end_at');
 
-        return successResponse(wrapPaginate($query, SubscriptionResource::class));
+        $result = wrapPaginate($query);
+        $subscriptions = $result instanceof AbstractPaginator
+            ? $result->getCollection()
+            : $result;
+
+        $this->subscriptions->annotatePaid($subscriptions);
+        $serialized = $subscriptions->map(
+            fn (Subscription $subscription) => (new SubscriptionResource($subscription))->resolve($request),
+        );
+
+        if ($result instanceof AbstractPaginator) {
+            $result->setCollection($serialized);
+        } else {
+            $result = $serialized;
+        }
+
+        return successResponse($result);
     }
 
     /**

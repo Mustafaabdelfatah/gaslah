@@ -18,6 +18,7 @@ use App\Services\Accounting\JournalPostingService;
 use App\Services\Orders\PosOtpService;
 use App\Services\Payments\WalletService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -115,6 +116,45 @@ class SubscriptionService
             ->where('type', WalletTransactionTypeEnum::Debit->value)
             ->where('ref_id', $subscription->getKey())
             ->exists();
+    }
+
+    /**
+     * Mark a whole listing page with its paid state in two fixed queries.
+     *
+     * @param  Collection<int, Subscription>  $subscriptions
+     */
+    public function annotatePaid(Collection $subscriptions): void
+    {
+        if ($subscriptions->isEmpty()) {
+            return;
+        }
+
+        $ids = $subscriptions->modelKeys();
+        $organizationIds = $subscriptions->pluck('organization_id')->unique()->values();
+        $customerIds = $subscriptions->pluck('customer_id')->unique()->values();
+
+        $ledgerKeys = JournalEntry::query()
+            ->whereIn('organization_id', $organizationIds)
+            ->where('source', JournalSourceEnum::Payment->value)
+            ->where('ref_type', 'Subscription')
+            ->whereIn('ref_id', $ids)
+            ->get(['organization_id', 'ref_id'])
+            ->mapWithKeys(fn (JournalEntry $entry) => ["{$entry->organization_id}:{$entry->ref_id}" => true]);
+
+        $walletKeys = WalletTransaction::query()
+            ->whereIn('customer_id', $customerIds)
+            ->where('type', WalletTransactionTypeEnum::Debit->value)
+            ->whereIn('ref_id', $ids)
+            ->get(['customer_id', 'ref_id'])
+            ->mapWithKeys(fn (WalletTransaction $transaction) => ["{$transaction->customer_id}:{$transaction->ref_id}" => true]);
+
+        $subscriptions->each(function (Subscription $subscription) use ($ledgerKeys, $walletKeys): void {
+            $subscription->setAttribute('paid',
+                (float) $subscription->plan?->price <= 0
+                || $ledgerKeys->has("{$subscription->organization_id}:{$subscription->getKey()}")
+                || $walletKeys->has("{$subscription->customer_id}:{$subscription->getKey()}")
+            );
+        });
     }
 
     /*

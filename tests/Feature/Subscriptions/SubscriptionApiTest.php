@@ -155,6 +155,20 @@ class SubscriptionApiTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_the_listing_reports_collection_state_without_guessing(): void
+    {
+        $this->actingAsManager();
+        $subscription = $this->buy(SubscriptionPlan::factory()->pieceQuota(30)->create([
+            'organization_id' => $this->organization->getKey(), 'price' => 150,
+        ]));
+
+        $this->getJson('/api/subscriptions')->assertOk()->assertJsonPath('data.data.0.paid', false);
+
+        $this->postJson("/api/subscriptions/{$subscription->getKey()}/pay", ['method' => 'card'])->assertOk();
+
+        $this->getJson('/api/subscriptions')->assertOk()->assertJsonPath('data.data.0.paid', true);
+    }
+
     public function test_a_free_plan_has_nothing_to_collect(): void
     {
         $this->actingAsManager();

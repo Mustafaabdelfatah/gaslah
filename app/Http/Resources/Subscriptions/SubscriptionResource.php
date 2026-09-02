@@ -38,6 +38,11 @@ class SubscriptionResource extends JsonResource
             'end_at' => $this->end_at,
             'auto_renew' => (bool) $this->auto_renew,
 
+            'paid' => $this->when(
+                array_key_exists('paid', $this->resource->getAttributes()),
+                fn () => (bool) $this->paid,
+            ),
+
             'created_at' => $this->created_at,
         ];
     }
