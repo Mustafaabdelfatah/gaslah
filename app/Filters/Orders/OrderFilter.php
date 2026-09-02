@@ -44,6 +44,11 @@ class OrderFilter
         $query
             ->when(request()->filled('status'), fn (Builder $q) => $q->whereIn('orders.status', resolveArray(request('status'))))
             ->when(request()->filled('payment_status'), fn (Builder $q) => $q->whereIn('orders.payment_status', resolveArray(request('payment_status'))))
+            ->when(request('delivery') === '1', fn (Builder $q) => $q->whereHas('deliveryRequests'))
+            ->when(request('late') === '1', fn (Builder $q) => $q
+                ->whereNotNull('orders.due_at')
+                ->where('orders.due_at', '<', now())
+                ->whereNotIn('orders.status', ['delivered', 'cancelled']))
             ->when(request()->filled('priority'), fn (Builder $q) => $q->where('orders.priority', request('priority')))
             ->when(request()->filled('customer_id'), fn (Builder $q) => $q->where('orders.customer_id', request()->integer('customer_id')));
 

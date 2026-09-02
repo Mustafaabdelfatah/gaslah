@@ -130,4 +130,9 @@ class Order extends BaseModel
     {
         return $this->hasMany(OrderStatusHistory::class);
     }
+
+    public function deliveryRequests(): HasMany
+    {
+        return $this->hasMany(DeliveryRequest::class);
+    }
 }

@@ -5,6 +5,7 @@ namespace Tests\Feature\Orders;
 use App\Enum\Tenancy\StaffRoleEnum;
 use App\Models\Branch;
 use App\Models\Customer;
+use App\Models\DeliveryRequest;
 use App\Models\Order;
 use App\Models\Organization;
 use Database\Seeders\FeatureSeeder;
@@ -84,12 +85,67 @@ class OrderListApiTest extends TestCase
             ->assertJsonPath('data.total', 2);
     }
 
+    public function test_the_listing_filters_late_and_delivery_orders_like_the_live_screen(): void
+    {
+        $lateDelivery = $this->makeOrder(['due_at' => now()->subHour()]);
+        $this->makeOrder(['due_at' => now()->addHour()]);
+        $this->makeOrder(['due_at' => now()->subHour(), 'status' => 'delivered']);
+        DeliveryRequest::factory()->delivery()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+            'customer_id' => $this->customer->getKey(),
+            'order_id' => $lateDelivery->getKey(),
+        ]);
+
+        $this->getJson('/api/orders?late=1')
+            ->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.id', $lateDelivery->getKey());
+
+        $this->getJson('/api/orders?delivery=1')
+            ->assertOk()
+            ->assertJsonPath('data.total', 1)
+            ->assertJsonPath('data.data.0.delivery_type', 'delivery');
+    }
+
     public function test_an_order_from_another_tenant_is_not_found(): void
     {
         [, $otherBranch] = $this->createTenant();
         $foreign = $this->makeOrder(['branch_id' => $otherBranch->getKey()]);
 
         $this->getJson("/api/orders/{$foreign->getKey()}")->assertNotFound();
+    }
+
+    public function test_the_detail_matches_the_live_customer_rollup_and_activity_feed(): void
+    {
+        $order = $this->makeOrder(['created_at' => now()->subHours(3)]);
+        $this->makeOrder(['status' => 'ready', 'grand_total' => 85]);
+        $order->payments()->create(['method' => 'cash', 'amount' => 20]);
+        $order->statusHistories()->create([
+            'from_status' => 'received',
+            'to_status' => 'processing',
+            'at' => now()->subHour(),
+        ]);
+
+        $response = $this->getJson("/api/orders/{$order->getKey()}")->assertOk();
+
+        $response
+            ->assertJsonPath('data.branch_name', $this->branch->name)
+            ->assertJsonPath('data.customer_stats.total_orders', 2)
+            ->assertJsonPath('data.customer_stats.total_spent', 200)
+            ->assertJsonPath('data.customer_stats.by_status.received', 1)
+            ->assertJsonPath('data.customer_stats.by_status.ready', 1);
+
+        $this->assertEqualsCanonicalizing(
+            ['created', 'payment', 'status'],
+            collect($response->json('data.activity'))->pluck('type')->all(),
+        );
+
+        // Aggregate detail never leaks into the paginated collection.
+        $this->getJson('/api/orders')
+            ->assertOk()
+            ->assertJsonMissingPath('data.data.0.customer_stats')
+            ->assertJsonMissingPath('data.data.0.activity');
     }
 
     /**

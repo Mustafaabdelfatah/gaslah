@@ -183,6 +183,7 @@ return [
     'otp_service_unavailable' => 'خدمة رمز التحقق غير مُهيأة.',
     'otp_max_attempts' => 'تم تجاوز عدد المحاولات المسموح بها.',
     'otp_consent_required' => 'يلزم تحقق العميل برمز OTP قبل الخصم من المحفظة.',
+    'wallet_customer_required' => 'لا يوجد عميل مرتبط بالطلب للدفع من المحفظة.',
     'payment_not_confirmed' => 'لم يتم تأكيد الدفع.',
     'payment_terminal_reference_required' => 'لم يتم استلام رمز عملية الشبكة — الدفع مرفوض.',
     'amount_received_invalid' => 'المبلغ المستلم غير صالح.',

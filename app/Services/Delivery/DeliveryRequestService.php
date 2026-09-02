@@ -201,6 +201,8 @@ class DeliveryRequestService
             'total' => (clone $window)->count(),
             'active_drivers' => Driver::query()->active()->where('is_platform', false)->whereIn('branch_id', $branchIds)->count(),
             'avg_delivery_minutes' => $this->avgDeliveryMinutes($branchIds, $since),
+            'avg_service_minutes' => $this->avgServiceMinutes($branchIds, $since),
+            'window_days' => 90,
         ];
     }
 
@@ -234,6 +236,7 @@ class DeliveryRequestService
     {
         $rows = DeliveryRequest::query()
             ->inBranches($branchIds)
+            ->where('type', DeliveryTypeEnum::Delivery->value)
             ->where('status', DeliveryStatusEnum::Delivered->value)
             ->whereNotNull('assigned_at')
             ->whereNotNull('completed_at')
@@ -244,8 +247,50 @@ class DeliveryRequestService
             return null;
         }
 
-        $minutes = $rows->map(fn (DeliveryRequest $r) => $r->assigned_at->diffInMinutes($r->completed_at));
+        $minutes = $rows
+            ->map(fn (DeliveryRequest $r) => $r->assigned_at->diffInSeconds($r->completed_at, false) / 60)
+            ->filter(fn (float $minutes) => $minutes >= 0);
 
-        return round($minutes->avg(), 1);
+        return $minutes->isEmpty() ? null : round($minutes->avg(), 1);
+    }
+
+    /**
+     * Average pickup-requested → delivery-completed minutes for orders that went
+     * through both legs. An unpaired trip must not distort the full-service KPI.
+     *
+     * @param  array<int, int>  $branchIds
+     */
+    private function avgServiceMinutes(array $branchIds, Carbon $since): ?float
+    {
+        $deliveries = DeliveryRequest::query()
+            ->inBranches($branchIds)
+            ->where('type', DeliveryTypeEnum::Delivery->value)
+            ->where('status', DeliveryStatusEnum::Delivered->value)
+            ->whereNotNull('order_id')
+            ->whereNotNull('completed_at')
+            ->where('completed_at', '>=', $since)
+            ->get(['order_id', 'completed_at']);
+
+        if ($deliveries->isEmpty()) {
+            return null;
+        }
+
+        $pickupStarts = DeliveryRequest::query()
+            ->inBranches($branchIds)
+            ->where('type', DeliveryTypeEnum::Pickup->value)
+            ->whereIn('order_id', $deliveries->pluck('order_id')->unique())
+            ->get(['order_id', 'created_at'])
+            ->groupBy('order_id')
+            ->map(fn (Collection $rows) => $rows->min('created_at'));
+
+        $minutes = $deliveries
+            ->filter(fn (DeliveryRequest $request) => $pickupStarts->has($request->order_id))
+            ->map(function (DeliveryRequest $request) use ($pickupStarts): float {
+                return Carbon::parse($pickupStarts->get($request->order_id))
+                    ->diffInSeconds($request->completed_at, false) / 60;
+            })
+            ->filter(fn (float $minutes) => $minutes >= 0);
+
+        return $minutes->isEmpty() ? null : round($minutes->avg(), 1);
     }
 }

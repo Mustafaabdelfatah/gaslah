@@ -6,6 +6,7 @@ use App\Enum\Orders\OrderStatusEnum;
 use App\Enum\Orders\PaymentStatusEnum;
 use App\Enum\Payments\PaymentMethodEnum;
 use App\Models\Order;
+use App\Services\Payments\WalletService;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -19,11 +20,20 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class OrderCollectionService
 {
-    public function __construct(private readonly OrderAccountingService $accounting) {}
+    public function __construct(
+        private readonly OrderAccountingService $accounting,
+        private readonly PosOtpService $otp,
+        private readonly WalletService $wallet,
+    ) {}
 
-    public function collect(Order $order, PaymentMethodEnum $method, float $amount, ?string $reference = null): Order
-    {
-        return DB::transaction(function () use ($order, $method, $amount, $reference) {
+    public function collect(
+        Order $order,
+        PaymentMethodEnum $method,
+        float $amount,
+        ?string $reference = null,
+        ?string $otpToken = null,
+    ): Order {
+        return DB::transaction(function () use ($order, $method, $amount, $reference, $otpToken) {
             /** @var Order $locked */
             $locked = Order::query()->whereKey($order->getKey())->lockForUpdate()->firstOrFail();
 
@@ -38,6 +48,15 @@ class OrderCollectionService
             $remaining = $locked->remaining();
             abort_if($remaining <= 0, Response::HTTP_UNPROCESSABLE_ENTITY, __('api.order_already_paid'));
 
+            if ($method === PaymentMethodEnum::Deferred) {
+                $locked->forceFill([
+                    'payment_status' => PaymentStatusEnum::Deferred->value,
+                    'archived_at' => null,
+                ])->save();
+
+                return $locked;
+            }
+
             // Refused rather than clamped: a figure larger than the debt is a typo, and
             // quietly taking less than the cashier typed hides it from them.
             abort_if(
@@ -45,6 +64,22 @@ class OrderCollectionService
                 Response::HTTP_UNPROCESSABLE_ENTITY,
                 __('api.payment_exceeds_remaining', ['remaining' => number_format($remaining, 2)]),
             );
+
+            if ($method === PaymentMethodEnum::Wallet) {
+                $customer = $locked->customer()->first();
+                abort_if($customer === null, Response::HTTP_UNPROCESSABLE_ENTITY, __('api.wallet_customer_required'));
+
+                if (! $this->otp->reserve((string) $otpToken, $customer)) {
+                    abort(Response::HTTP_UNPROCESSABLE_ENTITY, __('api.otp_consent_required'));
+                }
+
+                $this->wallet->debit(
+                    $customer,
+                    $amount,
+                    __('api.order_sale_memo', ['order_no' => $locked->order_no]),
+                    $locked->getKey(),
+                );
+            }
 
             $payment = $locked->payments()->create([
                 'method' => $method->value,

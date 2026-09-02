@@ -9,6 +9,7 @@ use App\Models\JournalEntry;
 use App\Models\Order;
 use App\Models\Organization;
 use App\Services\Accounting\ChartOfAccountsService;
+use App\Services\Orders\PosOtpService;
 use Database\Seeders\FeatureSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -94,10 +95,48 @@ class OrderCollectionApiTest extends TestCase
 
     public function test_wallet_is_not_a_counter_method_here(): void
     {
-        // A wallet draw needs the customer's OTP and belongs to the POS flow.
+        // A wallet draw never proceeds without the customer's one-shot consent.
         $this->postJson("/api/orders/{$this->debt()->getKey()}/payments", ['amount' => 10, 'method' => 'wallet'])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('method');
+            ->assertStatus(422);
+    }
+
+    public function test_wallet_collection_requires_and_burns_the_customer_otp_proof(): void
+    {
+        $this->customer->forceFill(['wallet_balance' => 80])->save();
+        $order = $this->debt();
+        $otp = app(PosOtpService::class);
+        $requested = $otp->request($this->customer);
+        $proof = $otp->verify($this->customer, $requested['dev_code'])['proof_token'];
+
+        $this->postJson("/api/orders/{$order->getKey()}/payments", [
+            'amount' => 50,
+            'method' => 'wallet',
+            'otp_token' => $proof,
+        ])->assertOk()->assertJsonPath('data.payment_status', 'partial');
+
+        $this->assertSame('30.00', $this->customer->fresh()->wallet_balance);
+
+        // The same consent can never draw a second time.
+        $this->postJson("/api/orders/{$order->getKey()}/payments", [
+            'amount' => 10,
+            'method' => 'wallet',
+            'otp_token' => $proof,
+        ])->assertStatus(422);
+        $this->assertSame('30.00', $this->customer->fresh()->wallet_balance);
+    }
+
+    public function test_deferred_marks_the_debt_without_creating_a_payment(): void
+    {
+        $order = $this->debt();
+
+        $this->postJson("/api/orders/{$order->getKey()}/payments", [
+            'amount' => 115,
+            'method' => 'deferred',
+        ])->assertOk()
+            ->assertJsonPath('data.payment_status', 'deferred')
+            ->assertJsonPath('data.paid_total', '0.00');
+
+        $this->assertDatabaseCount('payments', 0);
     }
 
     public function test_the_collection_lands_in_the_books(): void

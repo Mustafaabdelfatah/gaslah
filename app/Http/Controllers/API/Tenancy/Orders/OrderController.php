@@ -12,6 +12,7 @@ use App\Http\Requests\Orders\UpdateOrderStatusRequest;
 use App\Http\Resources\Orders\OrderResource;
 use App\Models\Order;
 use App\Services\Orders\OrderCollectionService;
+use App\Services\Orders\OrderDetailService;
 use App\Services\Orders\OrderStatusService;
 use App\Services\Payments\PayTokenService;
 use Illuminate\Http\JsonResponse;
@@ -39,6 +40,7 @@ class OrderController extends TenantController
     public function __construct(
         private readonly OrderStatusService $status,
         private readonly PayTokenService $payTokens,
+        private readonly OrderDetailService $details,
     ) {
         parent::__construct();
     }
@@ -48,7 +50,10 @@ class OrderController extends TenantController
         $this->staff();
 
         $query = app(Pipeline::class)
-            ->send(Order::query()->inBranches($this->readBranchIds())->with('customer:id,name,phone'))
+            ->send(Order::query()->inBranches($this->readBranchIds())->with(
+                'customer:id,name,phone',
+                'deliveryRequests:order_id,type',
+            ))
             ->through([OrderFilter::class, OrderByFilter::class])
             ->thenReturn();
 
@@ -119,9 +124,7 @@ class OrderController extends TenantController
         $this->staff();
         $this->assertInReadScope($order);
 
-        return successResponse(new OrderResource(
-            $order->load('items.service:id,name', 'payments', 'customer', 'statusHistories'),
-        ));
+        return successResponse($this->detailResource($order));
     }
 
     /**
@@ -136,10 +139,7 @@ class OrderController extends TenantController
 
         // The customer rides along because the board drops this row straight into
         // its new column — without it the card would lose its name on every move.
-        return successResponse(
-            new OrderResource($order->load('items.service:id,name', 'payments', 'customer:id,name,phone')),
-            __('api.updated_success'),
-        );
+        return successResponse($this->detailResource($order), __('api.updated_success'));
     }
 
     /**
@@ -153,12 +153,15 @@ class OrderController extends TenantController
     {
         $this->assertOwned($order);
 
-        $order = $collections->collect($order, $request->method(), $request->amount(), $request->reference());
-
-        return successResponse(
-            new OrderResource($order->load('items.service:id,name', 'payments', 'customer:id,name,phone')),
-            __('api.updated_success'),
+        $order = $collections->collect(
+            $order,
+            $request->method(),
+            $request->amount(),
+            $request->reference(),
+            $request->otpToken(),
         );
+
+        return successResponse($this->detailResource($order), __('api.updated_success'));
     }
 
     public function paymentLink(Order $order): JsonResponse
@@ -176,5 +179,21 @@ class OrderController extends TenantController
             'path' => $path,
             'url' => rtrim((string) config('services.payment.web_url'), '/').$path,
         ]);
+    }
+
+    private function detailResource(Order $order): OrderResource
+    {
+        $order->load(
+            'branch:id,name',
+            'items.service:id,name',
+            'payments',
+            'customer:id,name,phone',
+            'cashier:id,name',
+            'statusHistories.user:id,name',
+        );
+
+        return (new OrderResource($order))->withDetailContext(
+            $this->details->context($order, $this->readBranchIds()),
+        );
     }
 }

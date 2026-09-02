@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\DeliveryRequest;
 use App\Models\DeliveryZone;
 use App\Models\Driver;
+use App\Models\Order;
 use App\Models\Organization;
 use App\Models\Product;
 use App\Models\Service;
@@ -16,6 +17,7 @@ use App\Services\Accounting\ChartOfAccountsService;
 use App\Services\Delivery\DeliverySettingsService;
 use Database\Seeders\FeatureSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class DeliveryRequestApiTest extends TestCase
@@ -205,6 +207,56 @@ class DeliveryRequestApiTest extends TestCase
         $this->getJson('/api/delivery/stats')
             ->assertOk()
             ->assertJsonPath('data.pending_assignment', 1);
+    }
+
+    public function test_stats_match_the_live_delivery_and_full_service_averages(): void
+    {
+        $order = Order::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+            'customer_id' => $this->customer->getKey(),
+        ]);
+        $pickupStarted = Carbon::now()->subHours(4);
+
+        DeliveryRequest::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+            'customer_id' => $this->customer->getKey(),
+            'order_id' => $order->getKey(),
+            'type' => 'pickup',
+            'status' => 'at_facility',
+            'created_at' => $pickupStarted,
+        ]);
+        DeliveryRequest::factory()->delivery()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+            'customer_id' => $this->customer->getKey(),
+            'order_id' => $order->getKey(),
+            'status' => 'delivered',
+            'assigned_at' => Carbon::now()->subMinutes(90),
+            'completed_at' => Carbon::now(),
+        ]);
+
+        // A completed request in another branch must not alter either average.
+        [$foreignOrganization, $foreignBranch] = $this->createTenant();
+        $foreignCustomer = Customer::factory()->create([
+            'organization_id' => $foreignOrganization->getKey(),
+            'branch_id' => $foreignBranch->getKey(),
+        ]);
+        DeliveryRequest::factory()->delivery()->create([
+            'organization_id' => $foreignOrganization->getKey(),
+            'branch_id' => $foreignBranch->getKey(),
+            'customer_id' => $foreignCustomer->getKey(),
+            'status' => 'delivered',
+            'assigned_at' => Carbon::now()->subDays(10),
+            'completed_at' => Carbon::now(),
+        ]);
+
+        $this->getJson('/api/delivery/stats')
+            ->assertOk()
+            ->assertJsonPath('data.avg_delivery_minutes', 90)
+            ->assertJsonPath('data.avg_service_minutes', 240)
+            ->assertJsonPath('data.window_days', 90);
     }
 
     public function test_a_foreign_customer_cannot_receive_a_request(): void

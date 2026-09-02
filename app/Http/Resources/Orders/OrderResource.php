@@ -14,6 +14,21 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 class OrderResource extends JsonResource
 {
+    /** @var array{customer_stats: ?array<string, mixed>, activity: array<int, array<string, mixed>>}|null */
+    private ?array $detailContext = null;
+
+    /**
+     * Add the aggregate fields that belong only to the detail screen.
+     *
+     * @param  array{customer_stats: ?array<string, mixed>, activity: array<int, array<string, mixed>>}  $context
+     */
+    public function withDetailContext(array $context): self
+    {
+        $this->detailContext = $context;
+
+        return $this;
+    }
+
     public function toArray(Request $request): array
     {
         return [
@@ -32,6 +47,7 @@ class OrderResource extends JsonResource
             'payment_status' => $this->payment_status,
 
             'branch_id' => $this->branch_id,
+            'branch_name' => $this->whenLoaded('branch', fn () => $this->branch?->name),
             'customer_id' => $this->customer_id,
             'customer' => $this->whenLoaded('customer', fn () => $this->customer === null ? null : [
                 'id' => $this->customer->id,
@@ -46,6 +62,15 @@ class OrderResource extends JsonResource
             'tax_rate' => $this->tax_rate,
             'tax_total' => $this->tax_total,
             'delivery_fee' => $this->delivery_fee,
+            'delivery_type' => $this->whenLoaded('deliveryRequests', function () {
+                $types = $this->deliveryRequests->pluck('type')->map->value->unique()->values();
+
+                return match ($types->count()) {
+                    0 => null,
+                    1 => $types->first(),
+                    default => 'both',
+                };
+            }),
             'grand_total' => $this->grand_total,
             'paid_total' => $this->paid_total,
             'remaining' => $this->remaining(),
@@ -57,6 +82,14 @@ class OrderResource extends JsonResource
             'items' => OrderItemResource::collection($this->whenLoaded('items')),
             'payments' => PaymentResource::collection($this->whenLoaded('payments')),
             'status_histories' => $this->whenLoaded('statusHistories'),
+            'customer_stats' => $this->when(
+                $this->detailContext !== null,
+                fn () => $this->detailContext['customer_stats'],
+            ),
+            'activity' => $this->when(
+                $this->detailContext !== null,
+                fn () => $this->detailContext['activity'],
+            ),
 
             'created_at' => $this->created_at,
         ];

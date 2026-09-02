@@ -183,6 +183,7 @@ return [
     'otp_service_unavailable' => 'The verification code service is not configured.',
     'otp_max_attempts' => 'The allowed number of attempts has been exceeded.',
     'otp_consent_required' => 'Customer OTP verification is required before a wallet debit.',
+    'wallet_customer_required' => 'A linked customer is required for wallet payment.',
     'payment_not_confirmed' => 'The payment has not been confirmed.',
     'payment_terminal_reference_required' => 'No network transaction reference received — the payment is rejected.',
     'amount_received_invalid' => 'The amount received is invalid.',

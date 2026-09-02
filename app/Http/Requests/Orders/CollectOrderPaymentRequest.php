@@ -9,9 +9,9 @@ use Illuminate\Validation\Rule;
 /**
  * Collecting on an existing order at the counter.
  *
- * Only the methods that need no server-side verification are accepted: cash is in the
- * drawer, a card at the terminal and a transfer are receipts the cashier is holding.
- * Wallet and gateway money have their own verified paths.
+ * Counter methods are accepted directly. Wallet collection additionally carries a
+ * one-shot customer OTP proof; deferred changes the debt marker without inventing a
+ * payment row.
  */
 class CollectOrderPaymentRequest extends TenantFormRequest
 {
@@ -23,8 +23,11 @@ class CollectOrderPaymentRequest extends TenantFormRequest
                 PaymentMethodEnum::Cash->value,
                 PaymentMethodEnum::Card->value,
                 PaymentMethodEnum::Transfer->value,
+                PaymentMethodEnum::Wallet->value,
+                PaymentMethodEnum::Deferred->value,
             ])],
             'reference' => ['nullable', 'string', 'max:200'],
+            'otp_token' => ['nullable', 'string'],
         ];
     }
 
@@ -41,5 +44,10 @@ class CollectOrderPaymentRequest extends TenantFormRequest
     public function reference(): ?string
     {
         return $this->filled('reference') ? $this->string('reference')->trim()->toString() : null;
+    }
+
+    public function otpToken(): ?string
+    {
+        return $this->input('otp_token');
     }
 }
