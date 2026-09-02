@@ -16,8 +16,8 @@ class WalletTopupRequest extends TenantFormRequest
     public function rules(): array
     {
         return [
-            'amount' => ['required', 'numeric', 'gt:0'],
-            'method' => ['nullable', 'in:cash,bank'],
+            'amount' => ['required', 'numeric', 'gt:0', 'max:1000000'],
+            'method' => ['required', 'in:cash,card,transfer'],
             'note' => ['nullable', 'string', 'max:255'],
         ];
     }
@@ -29,9 +29,9 @@ class WalletTopupRequest extends TenantFormRequest
 
     public function fundingAccount(): SystemAccountEnum
     {
-        return $this->input('method') === 'bank'
-            ? SystemAccountEnum::Bank
-            : SystemAccountEnum::Cash;
+        return $this->input('method') === 'cash'
+            ? SystemAccountEnum::Cash
+            : SystemAccountEnum::Bank;
     }
 
     public function note(): ?string

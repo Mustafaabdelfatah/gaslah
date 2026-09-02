@@ -16,6 +16,7 @@ use App\Services\Payments\WalletService;
 use App\Services\Subscriptions\SubscriptionConsumptionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pipeline\Pipeline;
+use Illuminate\Support\Carbon;
 use Symfony\Component\HttpFoundation\Response;
 
 class CustomerController extends TenantController
@@ -104,9 +105,24 @@ class CustomerController extends TenantController
             WalletTransactionTypeEnum::Topup,
             $request->note() ?? __('api.wallet_topup_memo', ['name' => $customer->name]),
             fundingAccount: $request->fundingAccount(),
+            collectedAtBranchId: $this->writeBranchId(),
         );
 
-        return successResponse($result, __('api.updated_success'));
+        $receipt = [
+            'receipt_no' => 'WALLET-'.str_pad((string) $result['transaction_id'], 8, '0', STR_PAD_LEFT),
+            'customer_name' => $customer->name,
+            'customer_phone' => $customer->phone,
+            'amount' => $request->amount(),
+            'method' => $request->string('method')->toString(),
+            'balance_after' => $result['balance'],
+            'created_at' => Carbon::now(),
+        ];
+
+        return successResponse(
+            [...$result, 'receipt' => $receipt],
+            __('api.created_success'),
+            Response::HTTP_CREATED,
+        );
     }
 
     public function walletTransactions(Customer $customer): JsonResponse

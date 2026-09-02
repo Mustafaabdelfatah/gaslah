@@ -45,11 +45,12 @@ class WalletService
         ?int $refId = null,
         SystemAccountEnum $fundingAccount = SystemAccountEnum::Cash,
         bool $postAccounting = true,
+        ?int $collectedAtBranchId = null,
     ): array {
         $amount = round($amount, 2);
         $this->assertPositive($amount);
 
-        return DB::transaction(function () use ($customer, $amount, $type, $note, $refId, $fundingAccount, $postAccounting) {
+        return DB::transaction(function () use ($customer, $amount, $type, $note, $refId, $fundingAccount, $postAccounting, $collectedAtBranchId) {
             $current = $this->lockedBalance($customer);
             $newBalance = round($current + $amount, 2);
 
@@ -59,7 +60,7 @@ class WalletService
             // if the ledger post fails, the whole credit rolls back, so the wallet never
             // holds value the books do not show.
             if ($postAccounting && $type === WalletTransactionTypeEnum::Topup) {
-                $this->postTopUp($customer, $amount, $transaction->getKey(), $fundingAccount);
+                $this->postTopUp($customer, $amount, $transaction->getKey(), $fundingAccount, $collectedAtBranchId);
             }
 
             return ['balance' => $newBalance, 'transaction_id' => $transaction->getKey()];
@@ -149,8 +150,13 @@ class WalletService
         return $transaction;
     }
 
-    private function postTopUp(Customer $customer, float $amount, int $refId, SystemAccountEnum $fundingAccount): void
-    {
+    private function postTopUp(
+        Customer $customer,
+        float $amount,
+        int $refId,
+        SystemAccountEnum $fundingAccount,
+        ?int $collectedAtBranchId,
+    ): void {
         $organizationId = $customer->organization_id;
 
         $this->posting->post([
@@ -159,7 +165,9 @@ class WalletService
             'ref_type' => 'WalletTransaction',
             'ref_id' => $refId,
             'memo' => __('api.wallet_topup_memo', ['name' => $customer->name]),
-            'branch_id' => $customer->branch_id,
+            // Money belongs to the till that took it, which can differ from the
+            // customer's home branch when staff serve several branches.
+            'branch_id' => $collectedAtBranchId ?? $customer->branch_id,
             'lines' => [
                 ['account_id' => $this->chart->systemAccount($organizationId, $fundingAccount)->getKey(), 'debit' => $amount],
                 ['account_id' => $this->chart->systemAccount($organizationId, SystemAccountEnum::DeferredRevenue)->getKey(), 'credit' => $amount],

@@ -200,13 +200,44 @@ class CatalogAndCustomerApiTest extends TestCase
     public function test_a_wallet_topup_flows_through_the_wallet_service(): void
     {
         $this->actingAsManager();
-        $customer = Customer::factory()->create(['organization_id' => $this->organization->getKey()]);
+        $homeBranch = Branch::factory()->create(['organization_id' => $this->organization->getKey()]);
+        $customer = Customer::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $homeBranch->getKey(),
+        ]);
 
-        $this->postJson("/api/customers/{$customer->getKey()}/wallet/topup", ['amount' => 150, 'method' => 'cash'])
-            ->assertOk()
-            ->assertJsonPath('data.balance', 150);
+        $this->postJson("/api/customers/{$customer->getKey()}/wallet/topup", ['amount' => 150, 'method' => 'card'])
+            ->assertCreated()
+            ->assertJsonPath('data.balance', 150)
+            ->assertJsonPath('data.receipt.customer_name', $customer->name)
+            ->assertJsonPath('data.receipt.method', 'card')
+            ->assertJsonPath('data.receipt.balance_after', 150)
+            ->assertJsonStructure(['data' => ['receipt' => ['receipt_no', 'created_at']]]);
 
         $this->assertEquals('150.00', $customer->fresh()->wallet_balance);
+        // The collection belongs to the till's active branch, not the customer's
+        // home branch, otherwise branch books and shift reconciliation diverge.
+        $this->assertDatabaseHas('journal_entries', [
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+            'source' => 'wallet_topup',
+        ]);
+    }
+
+    public function test_wallet_topup_accepts_the_live_counter_methods_only(): void
+    {
+        $this->actingAsManager();
+        $customer = Customer::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+        ]);
+
+        $this->postJson("/api/customers/{$customer->getKey()}/wallet/topup", ['amount' => 10, 'method' => 'transfer'])
+            ->assertCreated();
+
+        $this->postJson("/api/customers/{$customer->getKey()}/wallet/topup", ['amount' => 10, 'method' => 'bank'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('method');
     }
 
     public function test_a_reception_member_cannot_manage_the_catalog(): void
