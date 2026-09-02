@@ -67,6 +67,13 @@ return [
         'app_secret' => env('WA_APP_SECRET'),
     ],
 
+    'sms' => [
+        'enabled' => env('SMS_ENABLED', false),
+        'url' => env('SMS_URL'),
+        'token' => env('SMS_TOKEN'),
+        'sender' => env('SMS_SENDER'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Integration secrets

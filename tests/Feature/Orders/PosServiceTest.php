@@ -129,6 +129,22 @@ class PosServiceTest extends TestCase
         // Grand total 115; 85 change parked in the wallet.
         $this->assertSame(PaymentStatusEnum::Paid, $order->payment_status);
         $this->assertEquals('85.00', $this->customer->fresh()->wallet_balance);
+        $this->assertNull($order->payments()->first()->cash_tendered);
+    }
+
+    public function test_cash_returned_as_change_is_kept_for_the_receipt_without_inflating_collection(): void
+    {
+        $order = $this->pos->create($this->organization->getKey(), $this->branch, null, [
+            'customer_id' => $this->customer->getKey(),
+            'items' => [['service_id' => $this->service->getKey(), 'quantity' => 1]],
+            'payment' => ['method' => 'cash', 'amount' => 200, 'overpay_to' => 'change'],
+        ]);
+
+        $payment = $order->payments()->firstOrFail();
+
+        $this->assertEquals('115.00', $payment->amount);
+        $this->assertEquals('200.00', $payment->cash_tendered);
+        $this->assertEquals('115.00', $order->paid_total);
     }
 
     public function test_a_card_payment_without_confirmation_is_refused(): void

@@ -31,7 +31,7 @@ class ZatcaInvoiceService
     public function phaseOneInvoice(Order $order, Organization $organization): array
     {
         $data = $this->invoiceInput($order, $organization);
-        $order->loadMissing('payments');
+        $order->loadMissing('branch:id,name', 'payments');
 
         return [
             'seller' => [
@@ -45,9 +45,21 @@ class ZatcaInvoiceService
                 'phone' => $order->customer?->phone,
             ],
             'order_no' => $order->order_no,
+            'branch_name' => $order->branch?->name,
             'timestamp' => $data['timestamp'],
             'currency' => $data['currency'],
-            'items' => $data['items'],
+            'receipt' => [
+                'enabled' => (bool) $organization->receipt_enabled,
+                'width' => (int) $organization->receipt_width,
+                'footer' => $organization->receipt_footer,
+            ],
+            'items' => array_map(static fn (array $item) => [
+                'name' => $item['name'],
+                'service_type' => $item['serviceType'],
+                'quantity' => $item['quantity'],
+                'unit_price' => $item['unitPrice'],
+                'line_total' => $item['lineTotal'],
+            ], $data['items']),
             'tax_rate' => $data['vatRate'],
             'subtotal' => $data['subtotal'],
             'discount_total' => $data['discountTotal'],
@@ -59,6 +71,7 @@ class ZatcaInvoiceService
             'payments' => $order->payments->sortBy('id')->values()->map(fn ($p) => [
                 'method' => $p->method->value,
                 'amount' => round((float) $p->amount, 2),
+                'cash_tendered' => $p->cash_tendered === null ? null : round((float) $p->cash_tendered, 2),
                 'reference' => $p->reference,
             ]),
             'qr' => Zatca::qrPayload(
@@ -147,7 +160,7 @@ class ZatcaInvoiceService
      */
     private function invoiceInput(Order $order, Organization $organization): array
     {
-        $order->loadMissing('items.service:id,name', 'customer:id,name,phone');
+        $order->loadMissing('items.service:id,name,service_type', 'customer:id,name,phone');
 
         $vatRate = (float) ($order->tax_rate ?? $organization->tax_rate ?? 15);
         $subtotal = round((float) $order->subtotal, 2);
@@ -161,6 +174,7 @@ class ZatcaInvoiceService
 
             return [
                 'name' => $garment ? "{$service} ({$garment})" : $service,
+                'serviceType' => $item->service?->service_type?->value,
                 'quantity' => round((float) $item->quantity, 2),
                 'unitPrice' => round((float) $item->unit_price, 2),
                 'lineTotal' => round((float) $item->line_total, 2),

@@ -7,9 +7,11 @@ use App\Enum\Messaging\WaEventEnum;
 use App\Enum\Messaging\WaMessageStatusEnum;
 use App\Jobs\SendWaMessage;
 use App\Models\MessagingSetting;
+use App\Models\OrganizationIntegration;
 use App\Models\WaMessage;
 use App\Models\WaTemplate;
 use App\Services\Messaging\Providers\MessagingProvider;
+use App\Services\Messaging\Providers\SmsProvider;
 use App\Services\Messaging\Providers\WhatsAppProvider;
 use BackedEnum;
 use Carbon\CarbonImmutable;
@@ -89,6 +91,11 @@ class WaService
             return $this->record($data, $category, WaMessageStatusEnum::Blocked, __('api.wa_invalid_phone'));
         }
         $data['to_phone'] = $phone;
+        $data['channel'] = strtolower((string) ($data['channel'] ?? 'whatsapp'));
+
+        if ($blocked = $this->channelBlock($organizationId, $data['channel'])) {
+            return $this->record($data, $category, WaMessageStatusEnum::Blocked, $blocked);
+        }
 
         // A platform-level message (no org) skips the org quota and lock entirely.
         if ($organizationId === null) {
@@ -228,8 +235,20 @@ class WaService
     /**
      * The provider for an organization (a per-org custom provider, or the bound default).
      */
-    public function provider(?int $organizationId): MessagingProvider
+    public function provider(?int $organizationId, string $channel = 'whatsapp'): MessagingProvider
     {
+        if ($channel === 'sms') {
+            $integration = $organizationId === null
+                ? null
+                : OrganizationIntegration::query()->where('organization_id', $organizationId)->first();
+
+            return new SmsProvider(
+                $integration?->sms_api_key ?: config('services.sms.token'),
+                $integration?->sms_sender ?: config('services.sms.sender'),
+                config('services.sms.url'),
+            );
+        }
+
         if ($organizationId !== null && $this->senderMode($organizationId) === 'custom') {
             $wa = $this->config($organizationId)['whatsapp'];
 
@@ -237,6 +256,34 @@ class WaService
         }
 
         return app(MessagingProvider::class);
+    }
+
+    private function channelBlock(?int $organizationId, string $channel): ?string
+    {
+        if (! in_array($channel, ['whatsapp', 'sms'], true)) {
+            return __('api.messaging_channel_invalid');
+        }
+
+        if ($channel === 'whatsapp') {
+            return null;
+        }
+
+        $integration = $organizationId === null
+            ? null
+            : OrganizationIntegration::query()->where('organization_id', $organizationId)->first();
+
+        if ($organizationId !== null && ($integration === null || ! $integration->messaging_enabled || ! $integration->sms_enabled)) {
+            return __('api.sms_not_enabled');
+        }
+
+        $token = $integration?->sms_api_key ?: config('services.sms.token');
+        $sender = $integration?->sms_sender ?: config('services.sms.sender');
+
+        if (! config('services.sms.enabled') || blank(config('services.sms.url')) || blank($token) || blank($sender)) {
+            return __('api.sms_not_configured');
+        }
+
+        return null;
     }
 
     /*

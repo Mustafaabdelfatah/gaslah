@@ -52,6 +52,11 @@ class ZatcaApiTest extends TestCase
     public function test_the_phase_one_invoice_carries_a_qr_and_totals(): void
     {
         $order = $this->order();
+        $order->payments()->create([
+            'method' => 'cash',
+            'amount' => 115,
+            'cash_tendered' => 200,
+        ]);
 
         $response = $this->getJson("/api/orders/{$order->getKey()}/invoice")->assertOk();
 
@@ -60,6 +65,11 @@ class ZatcaApiTest extends TestCase
         // Tag 1 (seller name) is present in the decoded TLV payload.
         $this->assertStringContainsString($this->organization->name, base64_decode($qr));
         $this->assertEquals(115, $response->json('data.grand_total'));
+        $response->assertJsonPath('data.branch_name', $this->branch->name)
+            ->assertJsonPath('data.receipt.enabled', true)
+            ->assertJsonPath('data.receipt.width', 80)
+            ->assertJsonPath('data.items.0.service_type', $this->service->service_type->value)
+            ->assertJsonPath('data.payments.0.cash_tendered', 200);
     }
 
     /*

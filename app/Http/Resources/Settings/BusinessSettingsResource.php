@@ -26,6 +26,7 @@ class BusinessSettingsResource extends JsonResource
             'vat_number' => $this->vat_number,
 
             'receipt_footer' => $this->receipt_footer,
+            'receipt_enabled' => (bool) $this->receipt_enabled,
             'receipt_width' => $this->receipt_width,
 
             'brand_primary' => $this->brand_primary,

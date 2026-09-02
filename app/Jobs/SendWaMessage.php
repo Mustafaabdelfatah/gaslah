@@ -38,7 +38,7 @@ class SendWaMessage implements ShouldQueue
             return;
         }
 
-        $result = $wa->provider($message->organization_id)->send($message->to_phone, $message->body, $message->channel);
+        $result = $wa->provider($message->organization_id, $message->channel)->send($message->to_phone, $message->body, $message->channel);
 
         if (in_array($result['status'], ['sent', 'logged'], true)) {
             $message->forceFill([

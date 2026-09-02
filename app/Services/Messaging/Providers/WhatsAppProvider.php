@@ -20,6 +20,10 @@ class WhatsAppProvider implements MessagingProvider
 
     public function send(string $to, string $body, string $channel): array
     {
+        if ($channel !== 'whatsapp') {
+            return ['status' => 'failed', 'provider' => 'whatsapp'];
+        }
+
         try {
             $response = Http::withToken($this->token)
                 ->timeout(10)

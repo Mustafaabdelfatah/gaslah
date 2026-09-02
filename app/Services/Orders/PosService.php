@@ -212,6 +212,7 @@ class PosService
     private function settleCash(Order $order, Customer $customer, array $payment, float $remaining): void
     {
         $collect = $remaining;
+        $cashTendered = null;
 
         if (isset($payment['amount'])) {
             $tendered = round((float) $payment['amount'], 2);
@@ -228,10 +229,12 @@ class PosService
                     __('api.wallet_topped_up_change'),
                     $order->getKey(),
                 );
+            } elseif ($tendered > $remaining) {
+                $cashTendered = $tendered;
             }
         }
 
-        $this->recordPayment($order, PaymentMethodEnum::Cash, $collect);
+        $this->recordPayment($order, PaymentMethodEnum::Cash, $collect, cashTendered: $cashTendered);
         $this->applyPaid($order, $collect, $remaining);
     }
 
@@ -290,11 +293,18 @@ class PosService
         $this->applyPaid($order, $paid, $remaining);
     }
 
-    private function recordPayment(Order $order, PaymentMethodEnum $method, float $amount, ?PaymentVerifyModeEnum $verifyMode = null, ?string $reference = null): void
-    {
+    private function recordPayment(
+        Order $order,
+        PaymentMethodEnum $method,
+        float $amount,
+        ?PaymentVerifyModeEnum $verifyMode = null,
+        ?string $reference = null,
+        ?float $cashTendered = null,
+    ): void {
         $order->payments()->create([
             'method' => $method->value,
             'amount' => $amount,
+            'cash_tendered' => $cashTendered,
             'verify_mode' => $verifyMode?->value,
             'reference' => $reference,
         ]);

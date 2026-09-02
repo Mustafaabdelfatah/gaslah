@@ -19,6 +19,7 @@ class Payment extends BaseModel
         'order_id',
         'method',
         'amount',
+        'cash_tendered',
         'reference',
         'verify_mode',
         'shift_id',
@@ -30,6 +31,7 @@ class Payment extends BaseModel
         'method' => PaymentMethodEnum::class,
         'verify_mode' => PaymentVerifyModeEnum::class,
         'amount' => 'decimal:2',
+        'cash_tendered' => 'decimal:2',
         'via_gateway' => 'boolean',
         'created_at' => 'datetime',
     ];

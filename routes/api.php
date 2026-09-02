@@ -75,6 +75,7 @@ use App\Http\Controllers\API\Tenancy\Messaging\OrgAnnouncementController;
 use App\Http\Controllers\API\Tenancy\Messaging\WaController;
 use App\Http\Controllers\API\Tenancy\Orders\AutomationController;
 use App\Http\Controllers\API\Tenancy\Orders\OrderController;
+use App\Http\Controllers\API\Tenancy\Orders\OrderNotificationController;
 use App\Http\Controllers\API\Tenancy\Orders\PosController;
 use App\Http\Controllers\API\Tenancy\OrganizationController;
 use App\Http\Controllers\API\Tenancy\OrgUserController;
@@ -407,6 +408,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
         // ZATCA e-invoicing: Phase 1 instant QR + Phase 2 stored UBL invoice.
         Route::get('{order}/invoice', [ZatcaController::class, 'invoice']);
+        Route::post('{order}/notify', [OrderNotificationController::class, 'store']);
         Route::post('{order}/zatca-invoice', [ZatcaPhase2Controller::class, 'store'])
             ->middleware('tenant:permission,orders.manage');
         Route::get('{order}/zatca-invoice', [ZatcaPhase2Controller::class, 'show']);

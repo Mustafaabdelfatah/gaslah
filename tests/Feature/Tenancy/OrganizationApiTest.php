@@ -13,6 +13,8 @@ use App\Models\Organization;
 use App\Models\User;
 use App\Services\Accounting\ChartOfAccountsService;
 use App\Services\Accounting\ExpenseService;
+use App\Services\Reports\ReportRangeService;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -128,8 +130,11 @@ class OrganizationApiTest extends TestCase
             ->assertOk()->assertJsonPath('data.monthly_salary', '3000.00');
 
         // A 30-day window is exactly one month's worth of that salary.
-        $to = now()->toDateString();
-        $from = now()->subDays(29)->toDateString();
+        // API date filters are Riyadh business days. Using Laravel's UTC `now()`
+        // makes this test drop today's order between 21:00 and midnight UTC.
+        $today = CarbonImmutable::now(ReportRangeService::TIMEZONE);
+        $to = $today->toDateString();
+        $from = $today->subDays(29)->toDateString();
         $response = $this->getJson("/api/organization/performance/employees?from={$from}&to={$to}")->assertOk();
 
         $row = collect($response->json('data.employees'))->firstWhere('user_id', $admin->getKey());

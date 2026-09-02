@@ -29,6 +29,7 @@ class UpdateBusinessSettingsRequest extends TenantFormRequest
             'name' => ['required', 'string', 'min:1', 'max:200'],
             'default_currency' => ['required', 'string', 'min:1', 'max:10'],
             'tax_rate' => ['required', 'numeric', 'min:0', 'max:100'],
+            'receipt_enabled' => ['required', 'boolean'],
             'receipt_width' => ['required', 'integer', 'in:'.implode(',', self::RECEIPT_WIDTHS)],
 
             'phone' => ['nullable', 'string', 'max:40'],

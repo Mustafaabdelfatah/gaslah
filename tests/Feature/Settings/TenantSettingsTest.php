@@ -79,12 +79,14 @@ class TenantSettingsTest extends TestCase
             'name' => 'مغسلة النور',
             'default_currency' => 'SAR',
             'tax_rate' => 15,
+            'receipt_enabled' => false,
             'receipt_width' => 80,
             'vat_number' => '310000000000003',
             'brand_primary' => '#AABBCC',
         ])
             ->assertOk()
             ->assertJsonPath('data.name', 'مغسلة النور')
+            ->assertJsonPath('data.receipt_enabled', false)
             ->assertJsonPath('data.receipt_width', 80)
             // Stored in one case, so the same colour never appears as two values.
             ->assertJsonPath('data.brand_primary', '#aabbcc');
@@ -304,6 +306,7 @@ class TenantSettingsTest extends TestCase
             'name' => $this->organization->name,
             'default_currency' => 'SAR',
             'tax_rate' => 15,
+            'receipt_enabled' => true,
             'receipt_width' => 58,
         ];
     }

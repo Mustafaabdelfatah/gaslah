@@ -36,6 +36,7 @@ class Organization extends BaseModel
         'cr_number',
         'vat_number',
         'receipt_footer',
+        'receipt_enabled',
         'receipt_width',
         'brand_primary',
         'brand_accent',
@@ -55,6 +56,7 @@ class Organization extends BaseModel
     protected $casts = [
         'tax_rate' => 'decimal:2',
         'account_credit' => 'decimal:2',
+        'receipt_enabled' => 'boolean',
         'receipt_width' => 'integer',
         'max_branches_override' => 'integer',
         'max_users_override' => 'integer',

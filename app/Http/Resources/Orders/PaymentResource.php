@@ -16,6 +16,7 @@ class PaymentResource extends JsonResource
             'id' => $this->id,
             'method' => $this->method,
             'amount' => $this->amount,
+            'cash_tendered' => $this->cash_tendered,
             'reference' => $this->reference,
             'verify_mode' => $this->verify_mode,
             'via_gateway' => (bool) $this->via_gateway,
