@@ -3,7 +3,6 @@
 namespace App\Services\Reports;
 
 use App\Enum\Orders\OrderStatusEnum;
-use App\Enum\Orders\PaymentStatusEnum;
 use App\Models\Customer;
 use App\Models\Order;
 use Carbon\CarbonImmutable;
@@ -19,12 +18,6 @@ class DashboardService
     private const INACTIVE_DAYS = 45;
 
     private const WALK_IN_PHONE = '0000000000';
-
-    private const DUE_STATUSES = [
-        PaymentStatusEnum::Unpaid->value,
-        PaymentStatusEnum::Partial->value,
-        PaymentStatusEnum::Deferred->value,
-    ];
 
     public function __construct(private readonly ReportRangeService $ranges) {}
 
@@ -42,6 +35,7 @@ class DashboardService
 
         $inBranches = fn () => Order::query()->whereIn('branch_id', $branchIds);
         $active = fn () => $inBranches()->whereNull('archived_at')->where('status', '!=', OrderStatusEnum::Cancelled->value);
+        $due = fn () => (clone $active())->outstanding();
 
         return [
             'orders_today' => (clone $inBranches())->whereBetween('created_at', [$todayStart, $tomorrowStart])->count(),
@@ -72,13 +66,13 @@ class DashboardService
 
             'collected' => $this->sum((clone $active()), 'paid_total'),
             'outstanding' => round(max(0, $this->sum((clone $active()), 'grand_total') - $this->sum((clone $active()), 'paid_total')), 2),
-            'unpaid_count' => (clone $active())->whereIn('payment_status', self::DUE_STATUSES)->count(),
-            'unpaid_amount' => $this->outstandingSum((clone $active())->whereIn('payment_status', self::DUE_STATUSES)),
+            'unpaid_count' => $due()->count(),
+            'unpaid_amount' => $this->outstandingSum($due()),
             'archived_count' => (clone $inBranches())->whereNotNull('archived_at')->whereBetween('created_at', [$todayStart, $tomorrowStart])->count(),
 
             'recent' => (clone $active())->with('customer:id,name')->latest('id')->limit(8)->get()
                 ->map(fn (Order $o) => ['id' => $o->getKey(), 'order_no' => $o->order_no, 'customer' => $o->customer?->name, 'status' => $o->status->value, 'grand_total' => round((float) $o->grand_total, 2), 'created_at' => $o->created_at]),
-            'unpaid' => (clone $active())->whereIn('payment_status', self::DUE_STATUSES)->with('customer:id,name')->latest('id')->limit(8)->get()
+            'unpaid' => $due()->with('customer:id,name')->latest('id')->limit(8)->get()
                 ->map(fn (Order $o) => ['id' => $o->getKey(), 'order_no' => $o->order_no, 'customer' => $o->customer?->name, 'remaining' => $o->remaining()]),
 
             'weekly' => $this->weekly($branchIds, $now),

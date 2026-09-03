@@ -66,8 +66,8 @@ class AnalyticsDashboardApiTest extends TestCase
     */
     public function test_the_dashboard_reports_today_and_stages(): void
     {
-        $this->order(['grand_total' => 100, 'status' => OrderStatusEnum::Received->value]);
-        $this->order(['grand_total' => 50, 'status' => OrderStatusEnum::Ready->value]);
+        $this->order(['grand_total' => 100, 'paid_total' => 100, 'payment_status' => PaymentStatusEnum::Paid->value, 'status' => OrderStatusEnum::Received->value]);
+        $this->order(['grand_total' => 50, 'paid_total' => 50, 'payment_status' => PaymentStatusEnum::Paid->value, 'status' => OrderStatusEnum::Ready->value]);
         $this->order(['grand_total' => 80, 'payment_status' => PaymentStatusEnum::Unpaid->value, 'paid_total' => 0]);
 
         $response = $this->getJson('/api/dashboard')->assertOk();
@@ -76,6 +76,55 @@ class AnalyticsDashboardApiTest extends TestCase
         $this->assertSame(1, $response->json('data.stages.ready'));
         $this->assertGreaterThanOrEqual(1, $response->json('data.unpaid_count'));
         $this->assertCount(7, $response->json('data.weekly'));
+    }
+
+    public function test_the_dashboard_lists_only_active_baskets_with_a_real_balance(): void
+    {
+        $unpaid = $this->order([
+            'grand_total' => 100,
+            'paid_total' => 0,
+            'payment_status' => PaymentStatusEnum::Unpaid->value,
+        ]);
+        $partial = $this->order([
+            'grand_total' => 120,
+            'paid_total' => 20,
+            'payment_status' => PaymentStatusEnum::Partial->value,
+        ]);
+        $deferred = $this->order([
+            'grand_total' => 80,
+            'paid_total' => 30,
+            'payment_status' => PaymentStatusEnum::Deferred->value,
+        ]);
+
+        $this->order([
+            'grand_total' => 100,
+            'paid_total' => 100,
+            'payment_status' => PaymentStatusEnum::Unpaid->value,
+        ]);
+        $this->order([
+            'grand_total' => 90,
+            'paid_total' => 0,
+            'payment_status' => PaymentStatusEnum::Unpaid->value,
+            'status' => OrderStatusEnum::Cancelled->value,
+        ]);
+        $this->order([
+            'grand_total' => 70,
+            'paid_total' => 0,
+            'payment_status' => PaymentStatusEnum::Unpaid->value,
+            'archived_at' => now(),
+        ]);
+
+        $response = $this->getJson('/api/dashboard')->assertOk();
+
+        $response
+            ->assertJsonPath('data.unpaid_count', 3)
+            ->assertJsonPath('data.unpaid_amount', 250)
+            ->assertJsonCount(3, 'data.unpaid');
+
+        $rows = collect($response->json('data.unpaid'))->keyBy('id');
+        $this->assertEquals(100, $rows->get($unpaid->getKey())['remaining']);
+        $this->assertEquals(100, $rows->get($partial->getKey())['remaining']);
+        $this->assertEquals(50, $rows->get($deferred->getKey())['remaining']);
     }
 
     public function test_the_dashboard_branch_filter_is_validated(): void
