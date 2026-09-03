@@ -54,6 +54,7 @@ use App\Http\Controllers\API\Tenancy\Accounting\BooksLockController;
 use App\Http\Controllers\API\Tenancy\Accounting\BudgetController;
 use App\Http\Controllers\API\Tenancy\Accounting\ExpenseController;
 use App\Http\Controllers\API\Tenancy\Accounting\JournalController;
+use App\Http\Controllers\API\Tenancy\Accounting\PayablesController;
 use App\Http\Controllers\API\Tenancy\Audit\AuditController;
 use App\Http\Controllers\API\Tenancy\Auth\PlatformLoginController;
 use App\Http\Controllers\API\Tenancy\Auth\StaffLoginController;
@@ -97,6 +98,7 @@ use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionController;
 use App\Http\Controllers\API\Tenancy\Subscriptions\SubscriptionPlanController;
 use App\Http\Controllers\API\Tenancy\Support\OrgSupportController;
 use App\Http\Controllers\API\Tenancy\Zatca\ZatcaController;
+use App\Http\Controllers\API\Tenancy\Zatca\ZatcaOnboardingController;
 use App\Http\Controllers\API\Tenancy\Zatca\ZatcaPhase2Controller;
 use App\Http\Controllers\API\User\PermissionController;
 use App\Http\Controllers\API\User\RoleController;
@@ -342,6 +344,24 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('{asset}', [AssetController::class, 'destroy']);
     });
 
+    // Supplier bills and recurring expenses — finance managers only.
+    Route::prefix('payables')->middleware('tenant:manager')->group(function () {
+        Route::get('/', [PayablesController::class, 'index']);
+        Route::post('/', [PayablesController::class, 'store']);
+        Route::get('suppliers', [PayablesController::class, 'suppliers']);
+
+        // Static recurring paths precede the bill id so they can never be swallowed by
+        // route-model binding as though "recurring" were a payable id.
+        Route::get('recurring', [PayablesController::class, 'recurringIndex']);
+        Route::post('recurring', [PayablesController::class, 'recurringStore']);
+        Route::put('recurring/{recurringBill}', [PayablesController::class, 'recurringUpdate']);
+        Route::delete('recurring/{recurringBill}', [PayablesController::class, 'recurringDestroy']);
+        Route::post('recurring/{recurringBill}/run', [PayablesController::class, 'recurringRun']);
+
+        Route::post('{payable}/pay', [PayablesController::class, 'settle']);
+        Route::delete('{payable}', [PayablesController::class, 'destroy']);
+    });
+
     /*
     |--------------------------------------------------------------------------
     | Gaslah — Catalog & Customers (staff)
@@ -414,9 +434,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('{order}/zatca-invoice', [ZatcaPhase2Controller::class, 'show']);
     });
 
-    // Where the organization stands on e-invoicing. Manager-gated: it is a compliance
-    // position, not a counter's concern.
-    Route::get('zatca/status', [ZatcaController::class, 'status'])->middleware('tenant:manager');
+    // ZATCA onboarding is organization-wide compliance state, managed by managers only.
+    Route::prefix('zatca')->middleware('tenant:manager')->group(function () {
+        Route::get('status', [ZatcaController::class, 'status']);
+        Route::post('onboarding/csr', [ZatcaOnboardingController::class, 'csr'])
+            ->middleware('throttle:10,1');
+        Route::post('onboarding/compliance', [ZatcaOnboardingController::class, 'compliance'])
+            ->middleware('throttle:10,1');
+    });
 
     /*
     |--------------------------------------------------------------------------

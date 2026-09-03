@@ -91,6 +91,25 @@ class Order extends BaseModel
         return $query->whereIn('branch_id', $branchIds);
     }
 
+    /**
+     * Baskets that still carry real customer debt.
+     *
+     * Deferred is part of the same debt set as unpaid and partial. Cancelled baskets
+     * never owe money, and a stale payment label must not count once the stored paid
+     * total covers the basket.
+     */
+    public function scopeOutstanding(Builder $query): Builder
+    {
+        return $query
+            ->where('status', '!=', OrderStatusEnum::Cancelled->value)
+            ->whereIn('payment_status', [
+                PaymentStatusEnum::Unpaid->value,
+                PaymentStatusEnum::Partial->value,
+                PaymentStatusEnum::Deferred->value,
+            ])
+            ->whereColumn('paid_total', '<', 'grand_total');
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Relations methods

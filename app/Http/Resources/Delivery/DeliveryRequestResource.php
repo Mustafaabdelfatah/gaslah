@@ -57,7 +57,14 @@ class DeliveryRequestResource extends JsonResource
                 'phone' => $this->driver->phone,
             ]),
             'order_id' => $this->order_id,
-            'order' => $this->whenLoaded('order'),
+            'order' => $this->whenLoaded('order', fn () => $this->order === null ? null : [
+                'id' => $this->order->id,
+                'order_no' => $this->order->order_no,
+                'status' => $this->order->status,
+                'payment_status' => $this->order->payment_status,
+                'grand_total' => $this->order->grand_total,
+                'paid_total' => $this->order->paid_total,
+            ]),
             'zone_id' => $this->zone_id,
             'zone' => new DeliveryZoneResource($this->whenLoaded('zone')),
 
@@ -67,7 +74,15 @@ class DeliveryRequestResource extends JsonResource
             'address' => $this->address,
             'lat' => $this->lat,
             'lng' => $this->lng,
+            'maps_link' => $this->lat !== null && $this->lng !== null
+                ? 'https://www.google.com/maps/search/?api=1&query='.$this->lat.','.$this->lng
+                : null,
             'notes' => $this->notes,
+
+            'next_statuses' => array_map(
+                static fn ($status) => $status->value,
+                $this->status->allowedNext($this->type),
+            ),
 
             'scheduled_at' => $this->scheduled_at,
             'assigned_at' => $this->assigned_at,

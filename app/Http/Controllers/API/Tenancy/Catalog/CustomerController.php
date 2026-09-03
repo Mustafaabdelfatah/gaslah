@@ -11,6 +11,7 @@ use App\Http\Requests\Catalog\WalletTopupRequest;
 use App\Http\Requests\Global\Other\PageRequest;
 use App\Http\Resources\Catalog\CustomerResource;
 use App\Models\Customer;
+use App\Models\Order;
 use App\Services\Catalog\CustomerContextService;
 use App\Services\Payments\WalletService;
 use App\Services\Subscriptions\SubscriptionConsumptionService;
@@ -36,6 +37,21 @@ class CustomerController extends TenantController
             ->send(Customer::query()->forOrganization($this->organizationId()))
             ->through([CustomerFilter::class, OrderByFilter::class])
             ->thenReturn();
+
+        // The live customer directory shows lifetime basket count and real debt on
+        // every row. Keep all three aggregates in this SQL query: resolving either
+        // relationship row-by-row would turn the page into an N+1.
+        $query
+            ->withCount('orders')
+            ->withCount([
+                'orders as unpaid_orders_count' => fn ($orders) => $orders->outstanding(),
+            ])
+            ->addSelect([
+                'outstanding_amount' => Order::query()
+                    ->selectRaw('COALESCE(SUM(orders.grand_total - orders.paid_total), 0)')
+                    ->whereColumn('orders.customer_id', 'customers.id')
+                    ->outstanding(),
+            ]);
 
         return successResponse(wrapPaginate($query, CustomerResource::class));
     }

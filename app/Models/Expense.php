@@ -7,6 +7,7 @@ use App\Enum\Accounting\ExpensePaidFromEnum;
 use App\Trait\Global\LogsActivityOptions;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * A posted expense, carrying a link to the journal entry it generated.
@@ -62,5 +63,10 @@ class Expense extends BaseModel
     public function journalEntry(): BelongsTo
     {
         return $this->belongsTo(JournalEntry::class);
+    }
+
+    public function payable(): HasOne
+    {
+        return $this->hasOne(Payable::class);
     }
 }

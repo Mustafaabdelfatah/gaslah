@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\ZatcaCsrGenerator;
 use App\Models\PersonalAccessToken;
 use App\Models\Role;
 use App\Models\User;
@@ -12,6 +13,7 @@ use App\Services\Messaging\Providers\MessagingProvider;
 use App\Services\Messaging\Providers\WhatsAppProvider;
 use App\Services\Platform\PlatformSettingsService;
 use App\Services\Tenancy\TenantContext;
+use App\Services\Zatca\OpenSslZatcaCsrGenerator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -33,6 +35,10 @@ class AppServiceProvider extends ServiceProvider
         // live in a table, and a listing that asks for the same group once per row would
         // turn one setting into an N+1.
         $this->app->scoped(PlatformSettingsService::class);
+
+        // The generator is swappable so onboarding tests never execute a host binary,
+        // while production still gets the ZATCA-specific OpenSSL extensions.
+        $this->app->bind(ZatcaCsrGenerator::class, OpenSslZatcaCsrGenerator::class);
 
         // The platform messaging transport: the real WhatsApp provider when platform
         // credentials are set, otherwise the log stub. Custom per-org providers are

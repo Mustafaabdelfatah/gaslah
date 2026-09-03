@@ -162,7 +162,12 @@ class DeliveryController extends TenantController
         $query = app(Pipeline::class)
             ->send(DeliveryRequest::query()
                 ->inBranches($this->readBranchIds())
-                ->with(['customer:id,name,phone', 'driver:id,name,phone']))
+                ->with([
+                    'customer:id,name,phone',
+                    'driver:id,name,phone',
+                    'zone',
+                    'order:id,order_no,status,payment_status,grand_total,paid_total',
+                ]))
             ->through([DeliveryRequestFilter::class, OrderByFilter::class])
             ->thenReturn();
 

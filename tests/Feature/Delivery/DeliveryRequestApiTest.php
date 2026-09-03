@@ -70,8 +70,43 @@ class DeliveryRequestApiTest extends TestCase
         $this->getJson('/api/delivery/requests')
             ->assertOk()
             ->assertJsonPath('data.data.0.type', 'pickup')
+            ->assertJsonPath('data.data.0.next_statuses', ['picked_up', 'cancelled'])
             // Signed photo URLs belong to the detail view only.
             ->assertJsonMissingPath('data.data.0.pickup_photo_signed_url');
+    }
+
+    public function test_the_dispatch_listing_includes_the_linked_invoice_zone_and_map(): void
+    {
+        app(DeliverySettingsService::class)->save($this->organization->getKey(), ['workflow' => ['manualAssign' => true]]);
+        $zone = DeliveryZone::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+        ]);
+        $order = Order::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+            'customer_id' => $this->customer->getKey(),
+        ]);
+
+        $this->postJson('/api/delivery/requests', [
+            'customer_id' => $this->customer->getKey(),
+            'type' => 'delivery',
+            'address' => 'Riyadh',
+            'zone_id' => $zone->getKey(),
+            'order_id' => $order->getKey(),
+            'lat' => 24.7136,
+            'lng' => 46.6753,
+        ])->assertCreated();
+
+        $this->getJson('/api/delivery/requests')
+            ->assertOk()
+            ->assertJsonPath('data.data.0.zone.id', $zone->getKey())
+            ->assertJsonPath('data.data.0.order.id', $order->getKey())
+            ->assertJsonPath('data.data.0.next_statuses', ['assigned', 'cancelled'])
+            ->assertJsonPath(
+                'data.data.0.maps_link',
+                'https://www.google.com/maps/search/?api=1&query=24.7136000,46.6753000',
+            );
     }
 
     public function test_both_creates_a_pickup_and_a_delivery(): void

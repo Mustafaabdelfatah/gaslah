@@ -17,7 +17,7 @@ class CustomerContextService
     public function __construct(private readonly LoyaltyService $loyalty) {}
 
     /**
-     * @return array{total_orders: int, total_spent: float, avg_basket: float, last_visit: string|null}
+     * @return array{total_orders: int, total_spent: float, avg_basket: float, last_visit: string|null, unpaid_orders_count: int, outstanding_amount: float}
      */
     public function stats(Customer $customer): array
     {
@@ -30,12 +30,18 @@ class CustomerContextService
 
         $totalOrders = (int) $row->total_orders;
         $totalSpent = round((float) $row->total_spent, 2);
+        $debt = $customer->orders()
+            ->outstanding()
+            ->selectRaw('COUNT(*) as unpaid_orders_count, COALESCE(SUM(grand_total - paid_total), 0) as outstanding_amount')
+            ->first();
 
         return [
             'total_orders' => $totalOrders,
             'total_spent' => $totalSpent,
             'avg_basket' => $totalOrders > 0 ? round($totalSpent / $totalOrders, 2) : 0.0,
             'last_visit' => $row->last_visit,
+            'unpaid_orders_count' => (int) $debt->unpaid_orders_count,
+            'outstanding_amount' => round((float) $debt->outstanding_amount, 2),
         ];
     }
 

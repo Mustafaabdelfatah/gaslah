@@ -78,6 +78,10 @@ class AutomationSweeper
         foreach ($orders as $order) {
             $delayMinutes = $this->resolveDelayMinutes($order, $delays);
 
+            if ($delayMinutes <= 0) {
+                continue;
+            }
+
             if (CarbonImmutable::instance($order->created_at)->addMinutes($delayMinutes)->lessThan($now)) {
                 $this->advance($order);
                 $advanced++;
@@ -129,7 +133,12 @@ class AutomationSweeper
         }
 
         return (int) $serviceTypes
-            ->map(fn ($type) => (int) ($delays['service_types'][$type instanceof \BackedEnum ? $type->value : $type][$priorityKey] ?? $default))
+            ->map(function ($type) use ($delays, $priorityKey, $default): int {
+                $key = $type instanceof \BackedEnum ? $type->value : $type;
+                $override = (int) ($delays['service_types'][$key][$priorityKey] ?? 0);
+
+                return $override > 0 ? $override : $default;
+            })
             ->max();
     }
 }

@@ -31,6 +31,7 @@ class ForumThreadResource extends JsonResource
             'title' => $this->title,
             'slug' => $this->slug,
             'status' => $this->status,
+            'rejection_reason' => $this->rejection_reason,
 
             'category_id' => $this->category_id,
             'category' => $this->whenLoaded('category', fn () => $this->category === null ? null : [

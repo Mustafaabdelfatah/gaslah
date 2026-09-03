@@ -70,6 +70,21 @@ class CustomerResource extends JsonResource
             'wallet_balance' => $this->wallet_balance,
             'preferences' => $this->preferences ?? [],
 
+            // Listing-only aggregates. They are conditional so create/update
+            // responses never pretend an unloaded figure is zero.
+            'orders_count' => $this->when(
+                array_key_exists('orders_count', $this->resource->getAttributes()),
+                fn () => (int) $this->orders_count,
+            ),
+            'unpaid_orders_count' => $this->when(
+                array_key_exists('unpaid_orders_count', $this->resource->getAttributes()),
+                fn () => (int) $this->unpaid_orders_count,
+            ),
+            'outstanding_amount' => $this->when(
+                array_key_exists('outstanding_amount', $this->resource->getAttributes()),
+                fn () => round((float) $this->outstanding_amount, 2),
+            ),
+
             'branch_id' => $this->branch_id,
 
             // Present only on the detail read the till makes; a listing leaves the

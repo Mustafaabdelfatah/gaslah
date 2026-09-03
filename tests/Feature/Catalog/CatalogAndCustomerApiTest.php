@@ -15,6 +15,7 @@ use App\Models\SubscriptionPlan;
 use App\Services\Accounting\ChartOfAccountsService;
 use Database\Seeders\FeatureSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class CatalogAndCustomerApiTest extends TestCase
@@ -185,6 +186,62 @@ class CatalogAndCustomerApiTest extends TestCase
         $this->getJson('/api/customers?search=0502220000')
             ->assertOk()
             ->assertJsonPath('data.total', 1);
+    }
+
+    public function test_the_customer_listing_carries_exact_lifetime_and_outstanding_aggregates(): void
+    {
+        $this->actingAsManager();
+        $customer = Customer::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+        ]);
+
+        $base = [
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+            'customer_id' => $customer->getKey(),
+        ];
+
+        Order::factory()->create([...$base, 'grand_total' => 100, 'paid_total' => 0, 'payment_status' => 'unpaid']);
+        Order::factory()->create([...$base, 'grand_total' => 200, 'paid_total' => 50, 'payment_status' => 'partial']);
+        Order::factory()->create([...$base, 'grand_total' => 80, 'paid_total' => 20, 'payment_status' => 'deferred']);
+        Order::factory()->create([...$base, 'grand_total' => 75, 'paid_total' => 75, 'payment_status' => 'deferred']);
+        Order::factory()->create([...$base, 'grand_total' => 40, 'paid_total' => 40, 'payment_status' => 'paid']);
+        Order::factory()->create([
+            ...$base,
+            'grand_total' => 999,
+            'paid_total' => 0,
+            'payment_status' => 'unpaid',
+            'status' => 'cancelled',
+        ]);
+        Customer::factory()->count(2)->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+        ]);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $response = $this->getJson('/api/customers?per_page=10')->assertOk();
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+        $row = collect($response->json('data.data'))->firstWhere('id', $customer->getKey());
+
+        $this->assertNotNull($row);
+        $this->assertSame(6, $row['orders_count']);
+        $this->assertSame(3, $row['unpaid_orders_count']);
+        $this->assertEqualsWithDelta(310, (float) $row['outstanding_amount'], 0.001);
+        $this->assertCount(
+            1,
+            collect($queries)->filter(fn (array $query) => str_contains(strtolower($query['query']), 'orders')),
+            'Customer order aggregates must stay inside the listing query instead of querying once per row.',
+        );
+
+        // The detail card uses the same complete debt definition, not the first
+        // page of orders loaded by the browser.
+        $this->getJson("/api/customers/{$customer->getKey()}")
+            ->assertOk()
+            ->assertJsonPath('data.stats.unpaid_orders_count', 3)
+            ->assertJsonPath('data.stats.outstanding_amount', 310);
     }
 
     public function test_the_same_phone_is_allowed_in_a_different_organization(): void

@@ -44,6 +44,7 @@ class OrderFilter
         $query
             ->when(request()->filled('status'), fn (Builder $q) => $q->whereIn('orders.status', resolveArray(request('status'))))
             ->when(request()->filled('payment_status'), fn (Builder $q) => $q->whereIn('orders.payment_status', resolveArray(request('payment_status'))))
+            ->when(request('outstanding') === '1', fn (Builder $q) => $q->outstanding())
             ->when(request('delivery') === '1', fn (Builder $q) => $q->whereHas('deliveryRequests'))
             ->when(request('late') === '1', fn (Builder $q) => $q
                 ->whereNotNull('orders.due_at')

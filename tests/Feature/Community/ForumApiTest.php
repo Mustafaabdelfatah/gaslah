@@ -81,6 +81,25 @@ class ForumApiTest extends TestCase
         $this->getJson('/api/community')->assertOk()->assertJsonCount(1, 'data.my_threads');
     }
 
+    public function test_the_community_feed_explains_rejected_and_hidden_threads_without_publishing_them(): void
+    {
+        $this->approvedThread([
+            'status' => ForumStatusEnum::Rejected->value,
+            'rejection_reason' => 'العنوان غير واضح',
+        ]);
+        $this->approvedThread(['status' => ForumStatusEnum::Hidden->value]);
+
+        $feed = $this->getJson('/api/community')->assertOk();
+
+        $feed->assertJsonPath('data.my_threads.0.status', 'hidden')
+            ->assertJsonPath('data.my_threads.1.status', 'rejected')
+            ->assertJsonPath('data.my_threads.1.rejection_reason', 'العنوان غير واضح');
+
+        $this->getJson('/api/forum/threads')
+            ->assertOk()
+            ->assertJsonPath('data.total', 0);
+    }
+
     public function test_the_thread_detail_carries_the_body_and_its_replies(): void
     {
         $thread = $this->approvedThread();

@@ -70,6 +70,35 @@ class OrderListApiTest extends TestCase
             ->assertJsonPath('data.total', 2);
     }
 
+    public function test_the_customer_outstanding_filter_is_exact_and_paginated(): void
+    {
+        foreach (range(1, 12) as $index) {
+            $this->makeOrder([
+                'payment_status' => $index % 3 === 0 ? 'deferred' : ($index % 2 === 0 ? 'partial' : 'unpaid'),
+                'paid_total' => $index % 2 === 0 ? 15 : 0,
+            ]);
+        }
+
+        $this->makeOrder(['status' => 'cancelled', 'payment_status' => 'unpaid']);
+        $this->makeOrder(['payment_status' => 'paid', 'paid_total' => 115]);
+        // A stale non-paid label with no actual remainder is not customer debt.
+        $this->makeOrder(['payment_status' => 'deferred', 'paid_total' => 115]);
+
+        $response = $this->getJson(
+            "/api/orders?customer_id={$this->customer->getKey()}&outstanding=1&per_page=5&page=2",
+        )->assertOk()
+            ->assertJsonPath('data.total', 12)
+            ->assertJsonPath('data.current_page', 2)
+            ->assertJsonPath('data.last_page', 3)
+            ->assertJsonCount(5, 'data.data');
+
+        foreach ($response->json('data.data') as $order) {
+            $this->assertNotSame('cancelled', $order['status']);
+            $this->assertContains($order['payment_status'], ['unpaid', 'partial', 'deferred']);
+            $this->assertGreaterThan(0, (float) $order['remaining']);
+        }
+    }
+
     public function test_the_listing_searches_by_ticket_and_by_customer(): void
     {
         $order = $this->makeOrder(['order_no' => 'ORD-9001']);

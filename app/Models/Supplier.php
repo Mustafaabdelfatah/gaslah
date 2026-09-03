@@ -30,4 +30,14 @@ class Supplier extends BaseModel
     {
         return $this->hasMany(PurchaseOrder::class);
     }
+
+    public function payables(): HasMany
+    {
+        return $this->hasMany(Payable::class);
+    }
+
+    public function recurringBills(): HasMany
+    {
+        return $this->hasMany(RecurringBill::class);
+    }
 }

@@ -16,6 +16,7 @@ use App\Models\ServiceCategory;
 use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
 use App\Services\Accounting\ChartOfAccountsService;
+use App\Services\Orders\PosOtpService;
 use App\Services\Payments\WalletService;
 use App\Services\Subscriptions\SubscriptionService;
 use Database\Seeders\FeatureSeeder;
@@ -205,6 +206,42 @@ class SubscriptionApiTest extends TestCase
     | POS consumption
     |--------------------------------------------------------------------------
     */
+    public function test_subscription_pos_payment_requires_an_otp_proof(): void
+    {
+        $this->actingAsStaff($this->createStaff($this->branch, StaffRoleEnum::Cashier));
+        $service = $this->service();
+        $subscription = $this->buy(SubscriptionPlan::factory()->prepaidBalance(500)->free()->create([
+            'organization_id' => $this->organization->getKey(),
+        ]));
+
+        $this->postJson('/api/pos/orders', [
+            'customer_id' => $this->customer->getKey(),
+            'items' => [['service_id' => $service->getKey(), 'quantity' => 1]],
+            'payment' => ['method' => 'subscription'],
+        ])->assertStatus(422);
+
+        $this->assertEquals('500.00', $subscription->fresh()->remaining_balance);
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    public function test_subscription_pos_payment_rejects_an_invalid_otp_proof(): void
+    {
+        $this->actingAsStaff($this->createStaff($this->branch, StaffRoleEnum::Cashier));
+        $service = $this->service();
+        $subscription = $this->buy(SubscriptionPlan::factory()->prepaidBalance(500)->free()->create([
+            'organization_id' => $this->organization->getKey(),
+        ]));
+
+        $this->postJson('/api/pos/orders', [
+            'customer_id' => $this->customer->getKey(),
+            'items' => [['service_id' => $service->getKey(), 'quantity' => 1]],
+            'payment' => ['method' => 'subscription', 'otp_token' => 'forged-proof'],
+        ])->assertStatus(422);
+
+        $this->assertEquals('500.00', $subscription->fresh()->remaining_balance);
+        $this->assertDatabaseCount('orders', 0);
+    }
+
     public function test_a_prepaid_subscription_settles_a_pos_order(): void
     {
         $this->actingAsStaff($this->createStaff($this->branch, StaffRoleEnum::Cashier));
@@ -217,7 +254,7 @@ class SubscriptionApiTest extends TestCase
         $response = $this->postJson('/api/pos/orders', [
             'customer_id' => $this->customer->getKey(),
             'items' => [['service_id' => $service->getKey(), 'quantity' => 1]],
-            'payment' => ['method' => 'subscription'],
+            'payment' => ['method' => 'subscription', 'otp_token' => $this->issueProof()],
         ])->assertCreated()->assertJsonPath('data.payment_status', 'paid');
 
         // Order 1 x 100 + 15% tax = 115 drawn from the 500 balance.
@@ -232,6 +269,27 @@ class SubscriptionApiTest extends TestCase
         $this->assertNotNull($entry);
     }
 
+    public function test_subscription_pos_payment_burns_the_proof_and_refuses_replay(): void
+    {
+        $this->actingAsStaff($this->createStaff($this->branch, StaffRoleEnum::Cashier));
+        $service = $this->service();
+        $subscription = $this->buy(SubscriptionPlan::factory()->prepaidBalance(500)->free()->create([
+            'organization_id' => $this->organization->getKey(),
+        ]));
+        $proof = $this->issueProof();
+        $payload = [
+            'customer_id' => $this->customer->getKey(),
+            'items' => [['service_id' => $service->getKey(), 'quantity' => 1]],
+            'payment' => ['method' => 'subscription', 'otp_token' => $proof],
+        ];
+
+        $this->postJson('/api/pos/orders', $payload)->assertCreated();
+        $this->postJson('/api/pos/orders', $payload)->assertStatus(422);
+
+        $this->assertEquals('385.00', $subscription->fresh()->remaining_balance);
+        $this->assertDatabaseCount('orders', 1);
+    }
+
     public function test_a_piece_quota_subscription_draws_pieces(): void
     {
         $this->actingAsStaff($this->createStaff($this->branch, StaffRoleEnum::Cashier));
@@ -243,7 +301,7 @@ class SubscriptionApiTest extends TestCase
         $this->postJson('/api/pos/orders', [
             'customer_id' => $this->customer->getKey(),
             'items' => [['service_id' => $service->getKey(), 'quantity' => 2]],
-            'payment' => ['method' => 'subscription'],
+            'payment' => ['method' => 'subscription', 'otp_token' => $this->issueProof()],
         ])->assertCreated();
 
         $this->assertEquals('3.00', $subscription->fresh()->remaining_quota);
@@ -256,12 +314,16 @@ class SubscriptionApiTest extends TestCase
 
         $plan = SubscriptionPlan::factory()->pieceQuota(1)->free()->create(['organization_id' => $this->organization->getKey()]);
         $this->buy($plan);
+        $proof = $this->issueProof();
 
         $this->postJson('/api/pos/orders', [
             'customer_id' => $this->customer->getKey(),
             'items' => [['service_id' => $service->getKey(), 'quantity' => 3]],
-            'payment' => ['method' => 'subscription'],
+            'payment' => ['method' => 'subscription', 'otp_token' => $proof],
         ])->assertStatus(422);
+
+        // The order transaction failed, so its proof reservation rolls back too.
+        $this->assertTrue(app(PosOtpService::class)->reserve($proof, $this->customer->fresh()));
     }
 
     public function test_consumption_is_refused_when_a_priced_subscription_is_unpaid(): void
@@ -278,7 +340,7 @@ class SubscriptionApiTest extends TestCase
         $this->postJson('/api/pos/orders', [
             'customer_id' => $this->customer->getKey(),
             'items' => [['service_id' => $service->getKey(), 'quantity' => 1]],
-            'payment' => ['method' => 'subscription'],
+            'payment' => ['method' => 'subscription', 'otp_token' => $this->issueProof()],
         ])->assertStatus(422);
     }
 
@@ -290,7 +352,7 @@ class SubscriptionApiTest extends TestCase
         $this->postJson('/api/pos/orders', [
             'customer_id' => $this->customer->getKey(),
             'items' => [['service_id' => $service->getKey(), 'quantity' => 1]],
-            'payment' => ['method' => 'subscription'],
+            'payment' => ['method' => 'subscription', 'otp_token' => $this->issueProof()],
         ])->assertStatus(422);
     }
 
@@ -307,6 +369,14 @@ class SubscriptionApiTest extends TestCase
     private function buy(SubscriptionPlan $plan): Subscription
     {
         return app(SubscriptionService::class)->purchase($plan, $this->customer);
+    }
+
+    private function issueProof(): string
+    {
+        $otp = app(PosOtpService::class);
+        $requested = $otp->request($this->customer);
+
+        return $otp->verify($this->customer, $requested['dev_code'])['proof_token'];
     }
 
     private function service(): Service

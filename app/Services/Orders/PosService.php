@@ -22,8 +22,8 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * Every price is re-derived from the catalog — a client price is never trusted. The
  * cart carries an idempotency key so a lost response cannot be double-billed, and a
- * wallet payment burns the customer's consent proof atomically before any balance
- * moves.
+ * stored-value payment burns the customer's consent proof atomically before any
+ * wallet balance or subscription quota moves.
  */
 class PosService
 {
@@ -182,9 +182,14 @@ class PosService
             return;
         }
 
-        // Settling from a subscription draws prepaid quota/balance rather than taking a
-        // payment method; it writes no payment row and recognises deferred revenue.
+        // A subscription draw is stored value too: burn the customer's one-shot
+        // consent before quota/balance moves. This runs inside the order transaction,
+        // so a later quota/payment refusal rolls the proof consumption back with it.
         if (($payment['method'] ?? null) === self::SUBSCRIPTION_METHOD) {
+            if (! $this->otp->reserve((string) ($payment['otp_token'] ?? ''), $customer)) {
+                abort(Response::HTTP_UNPROCESSABLE_ENTITY, __('api.otp_consent_required'));
+            }
+
             $this->subscriptions->consume($order, $customer);
 
             return;
@@ -334,8 +339,8 @@ class PosService
             return;
         }
 
-        // A subscription settlement carries no payment method to verify; the
-        // consumption service does its own checks at settlement time.
+        // A subscription settlement has no terminal/manual verification mode. Its
+        // one-shot OTP proof is burned atomically inside settlePayment instead.
         if (($payment['method'] ?? null) === self::SUBSCRIPTION_METHOD) {
             return;
         }

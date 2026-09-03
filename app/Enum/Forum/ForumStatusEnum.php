@@ -14,6 +14,8 @@ enum ForumStatusEnum: string
 
     case Pending = 'pending';
     case Approved = 'approved';
+    case Rejected = 'rejected';
+    case Hidden = 'hidden';
 
     /**
      * @return array<int, string>

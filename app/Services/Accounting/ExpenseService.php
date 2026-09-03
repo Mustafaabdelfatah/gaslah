@@ -5,6 +5,7 @@ namespace App\Services\Accounting;
 use App\Enum\Accounting\ExpenseCategoryEnum;
 use App\Enum\Accounting\ExpensePaidFromEnum;
 use App\Enum\Accounting\JournalSourceEnum;
+use App\Enum\Accounting\PayableStatusEnum;
 use App\Enum\Accounting\SystemAccountEnum;
 use App\Models\Expense;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +37,7 @@ class ExpenseService
      *     reference?: string|null,
      *     branch_id?: int|null,
      *     created_by_id?: int|null,
+     *     system_dated?: bool,
      * }  $data
      */
     public function record(array $data): Expense
@@ -44,8 +46,11 @@ class ExpenseService
         $category = $this->category($data['category']);
         $paidFrom = $this->paidFrom($data['paid_from'] ?? ExpensePaidFromEnum::Cash);
 
-        // The user chooses the date, so the period lock applies.
-        $this->booksLock->assertOpen($organizationId, $data['date']);
+        // A user-chosen date is locked. A recurring schedule dates its own occurrence,
+        // so blocking a missed occurrence would make the nightly catch-up fail forever.
+        if (! ($data['system_dated'] ?? false)) {
+            $this->booksLock->assertOpen($organizationId, $data['date']);
+        }
 
         $amount = round((float) $data['amount'], 2);
         $vat = round((float) ($data['vat_amount'] ?? 0), 2);
@@ -101,7 +106,14 @@ class ExpenseService
     public function reverseAndDelete(Expense $expense, ?int $createdById = null): void
     {
         DB::transaction(function () use ($expense, $createdById) {
-            $expense->loadMissing('journalEntry');
+            $expense->loadMissing(['journalEntry', 'payable']);
+
+            // The generic expenses endpoint must not bypass the AP workflow: after a
+            // settlement, deleting the accrual would leave the ledger with an orphaned
+            // Dr AP / Cr cash entry and corrupt the supplier balance.
+            if ($expense->payable?->status === PayableStatusEnum::Paid) {
+                abort(422, __('api.payable_paid_cannot_be_voided'));
+            }
 
             if ($expense->journalEntry !== null) {
                 $this->posting->post([

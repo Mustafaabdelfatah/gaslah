@@ -7,6 +7,7 @@ use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Models\Order;
 use App\Models\ZatcaInvoice;
 use App\Services\Zatca\ZatcaInvoiceService;
+use App\Services\Zatca\ZatcaOnboardingService;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -14,8 +15,10 @@ use Illuminate\Http\JsonResponse;
  */
 class ZatcaController extends TenantController
 {
-    public function __construct(private readonly ZatcaInvoiceService $invoices)
-    {
+    public function __construct(
+        private readonly ZatcaInvoiceService $invoices,
+        private readonly ZatcaOnboardingService $onboarding,
+    ) {
         parent::__construct();
     }
 
@@ -27,18 +30,11 @@ class ZatcaController extends TenantController
         return successResponse($this->invoices->phaseOneInvoice($order, $this->organization()));
     }
 
-    /**
-     * Where this organization stands on e-invoicing, stated plainly.
-     *
-     * The screen this feeds decides whether a laundry believes it is compliant, so it
-     * reports only what is true: phase 1 needs nothing but a VAT number, phase 2 is
-     * generating and chaining locally, and the link to the authority — onboarding,
-     * signing and reporting — is not built. Saying otherwise would be worse than
-     * saying nothing.
-     */
     public function status(): JsonResponse
     {
+        $this->requireManager();
         $organization = $this->organization();
+        $onboarding = $this->onboarding->status($organization);
 
         $chain = ZatcaInvoice::query()->forOrganization($organization->getKey());
         $last = (clone $chain)->orderByDesc('icv')->first();
@@ -62,14 +58,12 @@ class ZatcaController extends TenantController
                 'reported_count' => (clone $chain)->where('status', ZatcaInvoiceStatusEnum::Reported->value)->count(),
             ],
 
-            // Onboarding needs a CSID from the authority, which is OTP-gated behind
-            // their portal. Until that exists this stays false, and the screen says so.
-            'onboarded' => false,
-            'gaps' => [
-                'onboarding' => __('api.zatca_gap_onboarding'),
+            ...$onboarding,
+            'gaps' => array_filter([
+                'onboarding' => $onboarding['has_compliance_csid'] ? null : __('api.zatca_gap_onboarding'),
                 'signing' => __('api.zatca_gap_signing'),
                 'reporting' => __('api.zatca_gap_reporting'),
-            ],
+            ]),
         ]);
     }
 }
