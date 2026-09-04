@@ -18,21 +18,34 @@ class ReportController extends TenantController
         parent::__construct();
     }
 
+    public function overview(DateRangeRequest $request): JsonResponse
+    {
+        return successResponse($this->reports->overview($this->readBranchIds(), $this->range($request)));
+    }
+
+    public function managementOverview(TopCustomersRequest $request): JsonResponse
+    {
+        return successResponse(
+            $this->reports->managementOverview(
+                $this->readBranchIds(),
+                $this->range($request),
+                $request->limit(),
+            ),
+        );
+    }
+
     public function sales(DateRangeRequest $request): JsonResponse
     {
-
         return successResponse($this->reports->sales($this->readBranchIds(), $this->range($request)));
     }
 
     public function topProducts(DateRangeRequest $request): JsonResponse
     {
-
         return successResponse($this->reports->topProducts($this->readBranchIds(), $this->range($request)));
     }
 
     public function topCustomers(TopCustomersRequest $request): JsonResponse
     {
-
         return successResponse(
             $this->reports->topCustomers($this->readBranchIds(), $this->range($request), $request->limit()),
         );
@@ -40,7 +53,6 @@ class ReportController extends TenantController
 
     public function cancellationRate(DateRangeRequest $request): JsonResponse
     {
-
         return successResponse($this->reports->cancellationRate($this->readBranchIds(), $this->range($request)));
     }
 

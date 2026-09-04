@@ -87,7 +87,14 @@ class TenantContext
     {
         $id = $this->organizationId();
 
-        return $id === null ? null : Organization::find($id);
+        if ($id === null) {
+            return null;
+        }
+
+        // Do not retain the model on the scoped service. Laravel's test kernel and
+        // long-running workers can reuse the container scope across logical requests;
+        // a cached model would then hide settings changed by the preceding request.
+        return Organization::query()->find($id);
     }
 
     public function hasOrganization(): bool
@@ -216,22 +223,26 @@ class TenantContext
             return;
         }
 
+        $pinnedBranchId = $this->pinnedBranchId();
         $membership = $this->user->userBranches()
-            ->with('branch')
-            ->get()
-            ->filter(fn ($userBranch) => $userBranch->branch !== null);
+            ->join('branches', 'branches.id', '=', 'user_branches.branch_id')
+            ->select('user_branches.branch_id', 'branches.organization_id')
+            ->when(
+                $pinnedBranchId !== null,
+                fn ($query) => $query->orderByRaw(
+                    'CASE WHEN user_branches.branch_id = ? THEN 0 ELSE 1 END',
+                    [$pinnedBranchId],
+                ),
+            )
+            ->orderBy('user_branches.id')
+            ->first();
 
-        if ($membership->isEmpty()) {
+        if ($membership === null) {
             return;
         }
 
-        $pinnedBranchId = $this->pinnedBranchId();
-
-        $active = $membership->firstWhere('branch_id', $pinnedBranchId)
-            ?? $membership->first();
-
-        $this->writeBranchId = $active->branch_id;
-        $this->organizationId = $active->branch->organization_id;
+        $this->writeBranchId = (int) $membership->branch_id;
+        $this->organizationId = (int) $membership->organization_id;
     }
 
     /**

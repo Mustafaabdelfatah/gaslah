@@ -70,6 +70,38 @@ class OrderListApiTest extends TestCase
             ->assertJsonPath('data.total', 2);
     }
 
+    public function test_processing_orders_are_marked_ready_in_one_scoped_batch(): void
+    {
+        $first = $this->makeOrder(['status' => 'processing']);
+        $second = $this->makeOrder(['status' => 'processing']);
+
+        $this->patchJson('/api/orders/bulk/ready', ['ids' => [$first->getKey(), $second->getKey()]])
+            ->assertOk()
+            ->assertJsonPath('data.updated_ids.0', $first->getKey())
+            ->assertJsonPath('data.updated_ids.1', $second->getKey());
+
+        $this->assertDatabaseHas('orders', ['id' => $first->getKey(), 'status' => 'ready']);
+        $this->assertDatabaseHas('orders', ['id' => $second->getKey(), 'status' => 'ready']);
+        $this->assertDatabaseHas('order_status_histories', [
+            'order_id' => $first->getKey(),
+            'from_status' => 'processing',
+            'to_status' => 'ready',
+        ]);
+    }
+
+    public function test_a_bulk_status_change_never_crosses_the_branch_scope(): void
+    {
+        $owned = $this->makeOrder(['status' => 'processing']);
+        [, $foreignBranch] = $this->createTenant();
+        $foreign = $this->makeOrder(['branch_id' => $foreignBranch->getKey(), 'status' => 'processing']);
+
+        $this->patchJson('/api/orders/bulk/ready', ['ids' => [$owned->getKey(), $foreign->getKey()]])
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('orders', ['id' => $owned->getKey(), 'status' => 'processing']);
+        $this->assertDatabaseHas('orders', ['id' => $foreign->getKey(), 'status' => 'processing']);
+    }
+
     public function test_the_customer_outstanding_filter_is_exact_and_paginated(): void
     {
         foreach (range(1, 12) as $index) {

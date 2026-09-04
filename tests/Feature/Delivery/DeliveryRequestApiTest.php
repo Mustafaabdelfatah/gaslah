@@ -14,10 +14,12 @@ use App\Models\Product;
 use App\Models\Service;
 use App\Models\ServiceCategory;
 use App\Services\Accounting\ChartOfAccountsService;
+use App\Services\Delivery\DeliveryRequestService;
 use App\Services\Delivery\DeliverySettingsService;
 use Database\Seeders\FeatureSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class DeliveryRequestApiTest extends TestCase
@@ -242,6 +244,23 @@ class DeliveryRequestApiTest extends TestCase
         $this->getJson('/api/delivery/stats')
             ->assertOk()
             ->assertJsonPath('data.pending_assignment', 1);
+    }
+
+    public function test_delivery_stats_keep_a_bounded_query_count_as_trip_volume_grows(): void
+    {
+        DeliveryRequest::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+            'customer_id' => $this->customer->getKey(),
+        ]);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        app(DeliveryRequestService::class)->stats([$this->branch->getKey()]);
+        $queries = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertLessThanOrEqual(4, $queries);
     }
 
     public function test_stats_match_the_live_delivery_and_full_service_averages(): void

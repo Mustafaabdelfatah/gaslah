@@ -16,6 +16,7 @@ use App\Http\Requests\Delivery\DriverRequest;
 use App\Http\Requests\Delivery\StoreDeliveryRequestRequest;
 use App\Http\Requests\Global\Other\PageRequest;
 use App\Http\Resources\Delivery\DeliveryRequestResource;
+use App\Http\Resources\Delivery\DeliveryRequestSummaryResource;
 use App\Http\Resources\Delivery\DeliveryZoneResource;
 use App\Http\Resources\Delivery\DriverResource;
 use App\Models\Branch;
@@ -162,16 +163,22 @@ class DeliveryController extends TenantController
         $query = app(Pipeline::class)
             ->send(DeliveryRequest::query()
                 ->inBranches($this->readBranchIds())
+                ->select([
+                    'id', 'branch_id', 'customer_id', 'driver_id', 'order_id', 'zone_id',
+                    'type', 'status', 'fee', 'address', 'lat', 'lng', 'accepted_at',
+                    'arrived_at', 'external_provider', 'pickup_photo_url', 'delivery_photo_url',
+                    'invoice_approval_required', 'invoice_approved_at', 'created_at',
+                ])
                 ->with([
-                    'customer:id,name,phone',
-                    'driver:id,name,phone',
-                    'zone',
-                    'order:id,order_no,status,payment_status,grand_total,paid_total',
+                    'customer:id,name',
+                    'driver:id,name',
+                    'zone:id,name',
+                    'order:id,order_no',
                 ]))
             ->through([DeliveryRequestFilter::class, OrderByFilter::class])
             ->thenReturn();
 
-        return successResponse(wrapPaginate($query, DeliveryRequestResource::class));
+        return successResponse(wrapPaginate($query, DeliveryRequestSummaryResource::class));
     }
 
     public function showRequest(DeliveryRequest $delivery): JsonResponse

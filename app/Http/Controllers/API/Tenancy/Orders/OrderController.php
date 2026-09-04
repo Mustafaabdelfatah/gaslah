@@ -8,6 +8,7 @@ use App\Filters\Orders\OrderFilter;
 use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Global\Other\PageRequest;
 use App\Http\Requests\Orders\CollectOrderPaymentRequest;
+use App\Http\Requests\Orders\MarkOrdersReadyRequest;
 use App\Http\Requests\Orders\UpdateOrderStatusRequest;
 use App\Http\Resources\Orders\OrderResource;
 use App\Models\Order;
@@ -15,6 +16,7 @@ use App\Services\Orders\OrderCollectionService;
 use App\Services\Orders\OrderDetailService;
 use App\Services\Orders\OrderStatusService;
 use App\Services\Payments\PayTokenService;
+use App\Support\BusinessDateRange;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Pipeline\Pipeline;
 use Symfony\Component\HttpFoundation\Response;
@@ -82,7 +84,7 @@ class OrderController extends TenantController
 
             // Delivered is a record of what just left, not a queue.
             if ($status === OrderStatusEnum::Delivered) {
-                $query->whereDate('created_at', '>=', now()->toDateString());
+                $query->where('created_at', '>=', BusinessDateRange::todayStartUtc());
             }
 
             $columns[$status->value] = OrderResource::collection(
@@ -140,6 +142,19 @@ class OrderController extends TenantController
         // The customer rides along because the board drops this row straight into
         // its new column — without it the card would lose its name on every move.
         return successResponse($this->detailResource($order), __('api.updated_success'));
+    }
+
+    public function markReady(MarkOrdersReadyRequest $request): JsonResponse
+    {
+        $orders = $this->status->markReady(
+            $request->ids(),
+            $this->readBranchIds(),
+            $this->staff()->getKey(),
+        );
+
+        return successResponse([
+            'updated_ids' => $orders->pluck('id')->values(),
+        ], __('api.updated_success'));
     }
 
     /**

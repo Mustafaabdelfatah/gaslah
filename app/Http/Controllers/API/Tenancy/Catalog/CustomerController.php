@@ -9,10 +9,14 @@ use App\Http\Controllers\API\Tenancy\TenantController;
 use App\Http\Requests\Catalog\CustomerRequest;
 use App\Http\Requests\Catalog\WalletTopupRequest;
 use App\Http\Requests\Global\Other\PageRequest;
+use App\Http\Resources\Catalog\CustomerOrderSummaryResource;
 use App\Http\Resources\Catalog\CustomerResource;
+use App\Http\Resources\Payments\WalletTransactionResource;
+use App\Http\Resources\Subscriptions\SubscriptionResource;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Services\Catalog\CustomerContextService;
+use App\Services\Catalog\CustomerOverviewService;
 use App\Services\Payments\WalletService;
 use App\Services\Subscriptions\SubscriptionConsumptionService;
 use Illuminate\Http\JsonResponse;
@@ -26,6 +30,7 @@ class CustomerController extends TenantController
         private readonly WalletService $wallet,
         private readonly SubscriptionConsumptionService $subscriptions,
         private readonly CustomerContextService $context,
+        private readonly CustomerOverviewService $overview,
     ) {
         parent::__construct();
     }
@@ -83,6 +88,35 @@ class CustomerController extends TenantController
                 ->withSubscription($subscription, $this->subscriptions->isUsable($subscription))
                 ->withContext($this->context->stats($customer), $this->context->loyalty($customer)),
         );
+    }
+
+    public function overview(PageRequest $request, Customer $customer): JsonResponse
+    {
+        $this->assertOwned($customer);
+        $data = $this->overview->build($customer, $this->readBranchIds());
+
+        $data['orders']->through(
+            fn (Order $order) => (new CustomerOrderSummaryResource($order))->resolve($request),
+        );
+        $data['outstanding_orders']->through(
+            fn (Order $order) => (new CustomerOrderSummaryResource($order))->resolve($request),
+        );
+        $data['subscriptions']->through(
+            fn ($subscription) => (new SubscriptionResource($subscription))->resolve($request),
+        );
+
+        return successResponse([
+            'customer' => (new CustomerResource($customer))
+                ->withSubscription($data['active_subscription'], $data['subscription_usable'])
+                ->withContext($data['stats'], $data['loyalty']),
+            'wallet' => [
+                'balance' => $customer->wallet_balance,
+                'transactions' => WalletTransactionResource::collection($data['wallet_transactions'])->resolve($request),
+            ],
+            'orders' => $data['orders'],
+            'outstanding_orders' => $data['outstanding_orders'],
+            'subscriptions' => $data['subscriptions'],
+        ]);
     }
 
     public function update(CustomerRequest $request, Customer $customer): JsonResponse
@@ -147,7 +181,7 @@ class CustomerController extends TenantController
 
         return successResponse([
             'balance' => $customer->wallet_balance,
-            'transactions' => $this->wallet->history($customer),
+            'transactions' => WalletTransactionResource::collection($this->wallet->history($customer)),
         ]);
     }
 }

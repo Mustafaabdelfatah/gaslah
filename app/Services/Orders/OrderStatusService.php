@@ -10,10 +10,12 @@ use App\Enum\Orders\PaymentStatusEnum;
 use App\Enum\Payments\PaymentMethodEnum;
 use App\Enum\Payments\WalletTransactionTypeEnum;
 use App\Models\Order;
+use App\Models\OrderStatusHistory;
 use App\Services\Accounting\ChartOfAccountsService;
 use App\Services\Accounting\JournalPostingService;
 use App\Services\Messaging\WaService;
 use App\Services\Payments\WalletService;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -40,27 +42,32 @@ class OrderStatusService
      */
     public function transition(Order $order, OrderStatusEnum $target, ?int $userId = null): Order
     {
-        $current = $order->status;
+        $order = DB::transaction(function () use ($order, $target, $userId): Order {
+            // Validate against the locked database row, not the model state loaded by
+            // route binding. Two cashiers clicking together cannot both advance it.
+            $locked = Order::query()->whereKey($order->getKey())->lockForUpdate()->firstOrFail();
+            $current = $locked->status;
 
-        abort_unless($current->canTransitionTo($target), Response::HTTP_UNPROCESSABLE_ENTITY, __('api.invalid_status_transition'));
+            abort_unless($current->canTransitionTo($target), Response::HTTP_UNPROCESSABLE_ENTITY, __('api.invalid_status_transition'));
 
-        DB::transaction(function () use ($order, $current, $target, $userId) {
-            $order->forceFill(['status' => $target->value]);
+            $locked->forceFill(['status' => $target->value]);
 
             if ($target === OrderStatusEnum::Delivered) {
-                $order->forceFill(['delivered_at' => now()]);
+                $locked->forceFill(['delivered_at' => now()]);
             }
 
-            $order->save();
+            $locked->save();
 
-            $order->statusHistories()->create([
+            $locked->statusHistories()->create([
                 'user_id' => $userId,
                 'from_status' => $current->value,
                 'to_status' => $target->value,
                 'at' => now(),
             ]);
 
-            $this->syncArchive($order);
+            $this->syncArchive($locked);
+
+            return $locked;
         });
 
         if ($target === OrderStatusEnum::Cancelled) {
@@ -70,6 +77,57 @@ class OrderStatusService
         $this->notifyStatus($order, $target);
 
         return $order->refresh();
+    }
+
+    /**
+     * Move a selected work batch from processing to ready atomically. This is kept
+     * specific to the board action: cancellation and delivery have extra side effects
+     * that must continue through the single-order state machine.
+     *
+     * @param  array<int, int>  $ids
+     * @param  array<int, int>  $branchIds
+     * @return Collection<int, Order>
+     */
+    public function markReady(array $ids, array $branchIds, ?int $userId = null): Collection
+    {
+        $orders = DB::transaction(function () use ($ids, $branchIds, $userId): Collection {
+            $orders = Order::query()
+                ->inBranches($branchIds)
+                ->whereKey($ids)
+                ->with('customer:id,name,phone')
+                ->lockForUpdate()
+                ->get();
+
+            // A missing id may belong to another tenant. Answer as not found instead
+            // of revealing whether it exists outside the caller's branch scope.
+            abort_unless($orders->count() === count($ids), Response::HTTP_NOT_FOUND, __('api.not_found'));
+
+            foreach ($orders as $order) {
+                abort_unless(
+                    $order->status->canTransitionTo(OrderStatusEnum::Ready),
+                    Response::HTTP_UNPROCESSABLE_ENTITY,
+                    __('api.invalid_status_transition'),
+                );
+            }
+
+            $at = now();
+            Order::query()->whereKey($ids)->update(['status' => OrderStatusEnum::Ready->value]);
+            OrderStatusHistory::query()->insert($orders->map(fn (Order $order) => [
+                'order_id' => $order->getKey(),
+                'user_id' => $userId,
+                'from_status' => $order->status->value,
+                'to_status' => OrderStatusEnum::Ready->value,
+                'at' => $at,
+            ])->all());
+
+            $orders->each->forceFill(['status' => OrderStatusEnum::Ready->value]);
+
+            return $orders;
+        });
+
+        $orders->each(fn (Order $order) => $this->notifyStatus($order, OrderStatusEnum::Ready));
+
+        return $orders;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Filters\Orders;
 
+use App\Support\BusinessDateRange;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -58,9 +59,13 @@ class OrderFilter
 
     private function applyDateRange(Builder $query): static
     {
-        $query
-            ->when(request()->filled('from'), fn (Builder $q) => $q->whereDate('orders.created_at', '>=', request('from')))
-            ->when(request()->filled('to'), fn (Builder $q) => $q->whereDate('orders.created_at', '<=', request('to')));
+        if (request()->filled('from')) {
+            $query->where('orders.created_at', '>=', BusinessDateRange::startUtc(request('from')));
+        }
+
+        if (request()->filled('to')) {
+            $query->where('orders.created_at', '<', BusinessDateRange::endExclusiveUtc(request('to')));
+        }
 
         return $this;
     }

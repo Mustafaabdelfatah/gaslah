@@ -84,6 +84,9 @@ class PaymentWebhookService
     private function fetchCharge(string $txnId): array
     {
         $response = Http::withBasicAuth((string) config('services.moyasar.secret'), '')
+            ->connectTimeout(5)
+            ->timeout(15)
+            ->retry([100, 300])
             ->acceptJson()
             ->get(rtrim((string) config('services.moyasar.base_url'), '/')."/payments/{$txnId}");
 

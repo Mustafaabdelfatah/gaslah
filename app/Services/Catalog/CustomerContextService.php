@@ -3,6 +3,7 @@
 namespace App\Services\Catalog;
 
 use App\Enum\Orders\OrderStatusEnum;
+use App\Enum\Orders\PaymentStatusEnum;
 use App\Models\Customer;
 use App\Models\LoyaltyAccount;
 use App\Services\Loyalty\LoyaltyService;
@@ -23,25 +24,33 @@ class CustomerContextService
     {
         // Cancelled baskets are excluded everywhere money is summed; a visit that was
         // reversed is not spend.
+        $dueStatuses = [
+            PaymentStatusEnum::Unpaid->value,
+            PaymentStatusEnum::Partial->value,
+            PaymentStatusEnum::Deferred->value,
+        ];
         $row = $customer->orders()
             ->where('status', '!=', OrderStatusEnum::Cancelled->value)
-            ->selectRaw('COUNT(*) as total_orders, COALESCE(SUM(grand_total), 0) as total_spent, MAX(created_at) as last_visit')
+            ->selectRaw(
+                'COUNT(*) as total_orders,
+                 COALESCE(SUM(grand_total), 0) as total_spent,
+                 MAX(created_at) as last_visit,
+                 SUM(CASE WHEN payment_status IN (?, ?, ?) AND paid_total < grand_total THEN 1 ELSE 0 END) as unpaid_orders_count,
+                 COALESCE(SUM(CASE WHEN payment_status IN (?, ?, ?) AND paid_total < grand_total THEN grand_total - paid_total ELSE 0 END), 0) as outstanding_amount',
+                [...$dueStatuses, ...$dueStatuses],
+            )
             ->first();
 
         $totalOrders = (int) $row->total_orders;
         $totalSpent = round((float) $row->total_spent, 2);
-        $debt = $customer->orders()
-            ->outstanding()
-            ->selectRaw('COUNT(*) as unpaid_orders_count, COALESCE(SUM(grand_total - paid_total), 0) as outstanding_amount')
-            ->first();
 
         return [
             'total_orders' => $totalOrders,
             'total_spent' => $totalSpent,
             'avg_basket' => $totalOrders > 0 ? round($totalSpent / $totalOrders, 2) : 0.0,
             'last_visit' => $row->last_visit,
-            'unpaid_orders_count' => (int) $debt->unpaid_orders_count,
-            'outstanding_amount' => round((float) $debt->outstanding_amount, 2),
+            'unpaid_orders_count' => (int) $row->unpaid_orders_count,
+            'outstanding_amount' => round((float) $row->outstanding_amount, 2),
         ];
     }
 

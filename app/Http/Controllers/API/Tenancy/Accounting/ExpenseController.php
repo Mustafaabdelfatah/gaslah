@@ -7,6 +7,7 @@ use App\Http\Requests\Accounting\StoreExpenseRequest;
 use App\Http\Requests\Global\Other\PageRequest;
 use App\Models\Expense;
 use App\Services\Accounting\ExpenseService;
+use App\Support\BusinessDateRange;
 use Illuminate\Http\JsonResponse;
 
 class ExpenseController extends TenantController
@@ -21,8 +22,8 @@ class ExpenseController extends TenantController
 
         $query = Expense::query()
             ->where('organization_id', $this->organizationId())
-            ->when($request->filled('from'), fn ($q) => $q->whereDate('date', '>=', $request->input('from')))
-            ->when($request->filled('to'), fn ($q) => $q->whereDate('date', '<=', $request->input('to')))
+            ->when($request->filled('from'), fn ($q) => $q->where('date', '>=', $request->input('from')))
+            ->when($request->filled('to'), fn ($q) => $q->where('date', '<', BusinessDateRange::dayAfter($request->input('to'))))
             ->latest('date');
 
         return successResponse(wrapPaginate($query));

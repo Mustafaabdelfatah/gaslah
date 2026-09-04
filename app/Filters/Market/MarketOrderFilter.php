@@ -2,6 +2,7 @@
 
 namespace App\Filters\Market;
 
+use App\Support\BusinessDateRange;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -19,8 +20,8 @@ class MarketOrderFilter
         $query->when(request()->filled('payment_status'), static fn (Builder $q) => $q->where('payment_status', request('payment_status')));
         $query->when(request()->filled('supplier_id'), static fn (Builder $q) => $q->where('supplier_id', request('supplier_id')));
 
-        $query->when(request()->filled('from'), static fn (Builder $q) => $q->whereDate('created_at', '>=', request('from')));
-        $query->when(request()->filled('to'), static fn (Builder $q) => $q->whereDate('created_at', '<=', request('to')));
+        $query->when(request()->filled('from'), static fn (Builder $q) => $q->where('created_at', '>=', BusinessDateRange::startUtc(request('from'))));
+        $query->when(request()->filled('to'), static fn (Builder $q) => $q->where('created_at', '<', BusinessDateRange::endExclusiveUtc(request('to'))));
 
         return $query;
     }

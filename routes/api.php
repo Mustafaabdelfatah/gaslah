@@ -105,6 +105,10 @@ use App\Http\Controllers\API\User\RoleController;
 use App\Http\Controllers\API\User\UserController;
 use Illuminate\Support\Facades\Route;
 
+// Connectivity probe for tills. It deliberately touches neither authentication nor
+// tenant data, so dozens of open counters do not rebuild staff context every 20 seconds.
+Route::get('health', fn () => successResponse(['reachable' => true]));
+
 /*
 |--------------------------------------------------------------------------
 | Public Routes (Guest Accessible)
@@ -388,6 +392,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::prefix('customers')->middleware('tenant:permission,customers.manage')->group(function () {
         Route::get('/', [CustomerController::class, 'index']);
         Route::post('/', [CustomerController::class, 'store']);
+        Route::get('{customer}/overview', [CustomerController::class, 'overview']);
         Route::get('{customer}', [CustomerController::class, 'show']);
         Route::put('{customer}', [CustomerController::class, 'update']);
         Route::delete('{customer}', [CustomerController::class, 'destroy']);
@@ -417,6 +422,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         // Both sit above {order} so a literal segment is never read as an id.
         Route::get('board', [OrderController::class, 'board']);
         Route::get('scan/{code}', [OrderController::class, 'scan']);
+        Route::patch('bulk/ready', [OrderController::class, 'markReady']);
 
         Route::get('{order}', [OrderController::class, 'show']);
         Route::patch('{order}/status', [OrderController::class, 'updateStatus']);
@@ -541,11 +547,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::prefix('reports')->middleware('tenant:permission,reports.view')->group(function () {
+        Route::get('overview', [SalesReportController::class, 'overview']);
         Route::get('sales', [SalesReportController::class, 'sales']);
         Route::get('top-products', [SalesReportController::class, 'topProducts']);
 
         // Naming the best customers, and judging cancellations, is a manager's view.
         Route::middleware('tenant:manager')->group(function () {
+            Route::get('management-overview', [SalesReportController::class, 'managementOverview']);
             Route::get('top-customers', [SalesReportController::class, 'topCustomers']);
             Route::get('cancellation-rate', [SalesReportController::class, 'cancellationRate']);
         });

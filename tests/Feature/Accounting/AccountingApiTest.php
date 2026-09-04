@@ -12,9 +12,11 @@ use App\Models\JournalEntry;
 use App\Models\Order;
 use App\Models\Organization;
 use App\Models\User;
+use App\Services\Accounting\AccountingReportService;
 use Database\Seeders\FeatureSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AccountingApiTest extends TestCase
@@ -181,6 +183,17 @@ class AccountingApiTest extends TestCase
             ->assertJsonPath('data.customers.0.due', 260)
             ->assertJsonPath('data.customers.0.orders_count', 2)
             ->assertJsonPath('data.customers.0.bucket', 'd90');
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        app(AccountingReportService::class)->receivables(
+            $this->organization->getKey(),
+            [$this->branch->getKey()],
+        );
+        $queries = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertSame(1, $queries, 'Receivables must aggregate in SQL instead of hydrating every unpaid order.');
     }
 
     public function test_a_manager_can_record_an_expense_and_it_posts(): void

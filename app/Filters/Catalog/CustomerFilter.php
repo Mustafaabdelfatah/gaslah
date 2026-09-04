@@ -14,12 +14,23 @@ class CustomerFilter
     {
         $query = $next($request);
 
-        $search = request('search');
+        $search = trim((string) request('search', ''));
 
-        when($search, static fn () => $query->where(fn (Builder $q) => $q
-            ->where('name', 'like', "%{$search}%")
-            ->orWhere('phone', 'like', "%{$search}%")
-            ->orWhere('email', 'like', "%{$search}%")));
+        $query->when($search !== '', static function (Builder $query) use ($search): void {
+            $phoneSearch = preg_replace('/\D+/', '', $search);
+
+            $query->where(static function (Builder $query) use ($search, $phoneSearch): void {
+                $query
+                    ->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+
+                if ($phoneSearch !== '') {
+                    // Till searches normally start with a phone prefix. Avoid a leading
+                    // wildcard so the organization/phone index remains usable at scale.
+                    $query->orWhere('phone', 'like', "{$phoneSearch}%");
+                }
+            });
+        });
 
         $query->when(request()->filled('type'), fn (Builder $q) => $q->where('type', request('type')));
 

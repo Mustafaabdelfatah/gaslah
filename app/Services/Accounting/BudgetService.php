@@ -118,14 +118,16 @@ class BudgetService
             ->when($branchIds !== [], fn ($q) => $q->where(
                 fn ($sub) => $sub->whereIn('branch_id', $branchIds)->orWhereNull('branch_id'),
             ))
-            // whereDate, not whereBetween: SQLite keeps a date column as a full
-            // timestamp string, so the last day of the month sorts after the bare
-            // date bound and its spend silently drops out of the month it belongs to.
-            ->whereDate('date', '>=', $start->toDateString())
-            ->whereDate('date', '<=', $start->copy()->endOfMonth()->toDateString())
-            ->get(['branch_id', 'category', 'amount'])
-            ->groupBy(fn (Expense $expense) => "{$expense->branch_id}:{$expense->category->value}")
-            ->map(fn (Collection $rows) => round((float) $rows->sum('amount'), 2));
+            ->where('date', '>=', $start->toDateString())
+            ->where('date', '<', $start->copy()->addMonth()->startOfMonth()->toDateString())
+            ->selectRaw('branch_id, category, COALESCE(SUM(amount), 0) as total')
+            ->groupBy('branch_id', 'category')
+            ->get()
+            ->mapWithKeys(function (Expense $expense): array {
+                $category = is_object($expense->category) ? $expense->category->value : $expense->category;
+
+                return ["{$expense->branch_id}:{$category}" => round((float) $expense->total, 2)];
+            });
     }
 
     /**

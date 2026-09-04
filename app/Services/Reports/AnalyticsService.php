@@ -3,10 +3,8 @@
 namespace App\Services\Reports;
 
 use App\Enum\Orders\OrderStatusEnum;
-use App\Models\Customer;
 use App\Models\Order;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -29,16 +27,20 @@ class AnalyticsService
         $periodDays = $range['period_days'];
         $prior = $this->priorRange($range, $periodDays);
 
-        $current = $this->orders($branchIds, $range['from_utc'], $range['to_exclusive_utc']);
-        $priorOrders = $this->orders($branchIds, $prior['from_utc'], $prior['to_exclusive_utc']);
+        $summary = $this->summary($branchIds, $range, $prior);
+        $revenue = round((float) $summary->revenue, 2);
+        $priorRevenue = round((float) $summary->prior_revenue, 2);
+        $collected = round((float) $summary->collected, 2);
+        $orders = (int) $summary->orders;
 
-        $revenue = round($current->sum(fn ($o) => (float) $o->grand_total), 2);
-        $priorRevenue = round($priorOrders->sum(fn ($o) => (float) $o->grand_total), 2);
-        $collected = round($current->sum(fn ($o) => (float) $o->paid_total), 2);
-        $orders = $current->count();
-
-        $currentDaily = $this->dailySeries($current, $range['days']);
-        $priorDaily = $this->dailySeries($priorOrders, $prior['days']);
+        $dailyRevenue = $this->dailyRevenue(
+            $branchIds,
+            $prior['from_utc'],
+            $range['to_exclusive_utc'],
+        );
+        $currentDaily = $this->dailySeries($dailyRevenue, $range['days']);
+        $priorDaily = $this->dailySeries($dailyRevenue, $prior['days']);
+        $churnRisk = $this->churnRisk($branchIds);
 
         return [
             // The window the server actually used, which is not always the one asked
@@ -51,18 +53,18 @@ class AnalyticsService
                 'prior_revenue' => $priorRevenue,
                 'revenue_delta' => $priorRevenue > 0 ? round(($revenue - $priorRevenue) / $priorRevenue * 100, 2) : 0,
                 'orders' => $orders,
-                'prior_orders' => $priorOrders->count(),
+                'prior_orders' => (int) $summary->prior_orders,
                 'aov' => $orders > 0 ? round($revenue / $orders, 2) : 0,
                 'collected' => $collected,
                 'outstanding' => round(max(0, $revenue - $collected), 2),
-                'repeat_rate' => $this->repeatRate($branchIds, $range, $current),
-                'churn_risk_count' => count($this->churnRisk($branchIds)),
+                'repeat_rate' => $this->repeatRate($branchIds, $range),
+                'churn_risk_count' => count($churnRisk),
                 'forecast_next_week' => $this->forecast(array_values($currentDaily)),
             ],
             'trend' => $this->trend($range['days'], $currentDaily, array_values($priorDaily)),
-            'heatmap' => $this->heatmap($current),
+            'heatmap' => $this->heatmap($branchIds, $range),
             'service_mix' => $this->serviceMix($branchIds, $range),
-            'churn_risk' => $this->churnRisk($branchIds),
+            'churn_risk' => $churnRisk,
         ];
     }
 
@@ -72,18 +74,28 @@ class AnalyticsService
     |--------------------------------------------------------------------------
     */
 
-    /**
-     * @param  array<int, int>  $branchIds
-     * @return Collection<int, Order>
-     */
-    private function orders(array $branchIds, CarbonImmutable $fromUtc, CarbonImmutable $toUtc): Collection
+    private function summary(array $branchIds, array $range, array $prior): object
     {
         return Order::query()
-            ->whereIn('branch_id', $branchIds)
+            ->whereIn('orders.branch_id', $branchIds)
             ->where('status', '!=', OrderStatusEnum::Cancelled->value)
-            ->where('created_at', '>=', $fromUtc)
-            ->where('created_at', '<', $toUtc)
-            ->get(['created_at', 'grand_total', 'paid_total', 'customer_id']);
+            ->where('created_at', '>=', $prior['from_utc'])
+            ->where('created_at', '<', $range['to_exclusive_utc'])
+            ->selectRaw(
+                'SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) as orders,
+                 COALESCE(SUM(CASE WHEN created_at >= ? THEN grand_total ELSE 0 END), 0) as revenue,
+                 COALESCE(SUM(CASE WHEN created_at >= ? THEN paid_total ELSE 0 END), 0) as collected,
+                 SUM(CASE WHEN created_at < ? THEN 1 ELSE 0 END) as prior_orders,
+                 COALESCE(SUM(CASE WHEN created_at < ? THEN grand_total ELSE 0 END), 0) as prior_revenue',
+                [
+                    $range['from_utc'],
+                    $range['from_utc'],
+                    $range['from_utc'],
+                    $range['from_utc'],
+                    $range['from_utc'],
+                ],
+            )
+            ->first();
     }
 
     /**
@@ -108,22 +120,41 @@ class AnalyticsService
     }
 
     /**
-     * @param  Collection<int, Order>  $orders
+     * @param  array<string, float>  $dailyRevenue
      * @param  array<int, string>  $days
      * @return array<string, float>
      */
-    private function dailySeries(Collection $orders, array $days): array
+    private function dailySeries(array $dailyRevenue, array $days): array
     {
         $series = array_fill_keys($days, 0.0);
 
-        foreach ($orders as $order) {
-            $key = $this->ranges->dayKey($order->created_at);
-            if (array_key_exists($key, $series)) {
-                $series[$key] = round($series[$key] + (float) $order->grand_total, 2);
+        foreach ($dailyRevenue as $day => $revenue) {
+            if (array_key_exists($day, $series)) {
+                $series[$day] = $revenue;
             }
         }
 
         return $series;
+    }
+
+    /**
+     * @param  array<int, int>  $branchIds
+     * @return array<string, float>
+     */
+    private function dailyRevenue(array $branchIds, CarbonImmutable $fromUtc, CarbonImmutable $toUtc): array
+    {
+        $dayExpression = $this->ranges->localDateExpression('orders.created_at');
+
+        return Order::query()
+            ->whereIn('branch_id', $branchIds)
+            ->where('status', '!=', OrderStatusEnum::Cancelled->value)
+            ->where('created_at', '>=', $fromUtc)
+            ->where('created_at', '<', $toUtc)
+            ->selectRaw("{$dayExpression} as day, COALESCE(SUM(grand_total), 0) as revenue")
+            ->groupByRaw($dayExpression)
+            ->pluck('revenue', 'day')
+            ->map(fn ($revenue) => round((float) $revenue, 2))
+            ->all();
     }
 
     /**
@@ -149,23 +180,55 @@ class AnalyticsService
     }
 
     /**
-     * @param  Collection<int, Order>  $orders
      * @return array{grid: array<int, array<int, int>>, max: int}
      */
-    private function heatmap(Collection $orders): array
+    private function heatmap(array $branchIds, array $range): array
     {
         $grid = array_fill(0, 7, array_fill(0, 24, 0));
         $max = 0;
+        [$dayExpression, $hourExpression] = $this->localTimeExpressions('orders.created_at');
 
-        foreach ($orders as $order) {
-            $local = CarbonImmutable::instance($order->created_at)->setTimezone(ReportRangeService::TIMEZONE);
-            $dow = (int) $local->format('w'); // 0 = Sunday
-            $hour = (int) $local->format('G');
-            $grid[$dow][$hour]++;
-            $max = max($max, $grid[$dow][$hour]);
+        $rows = Order::query()
+            ->whereIn('branch_id', $branchIds)
+            ->where('status', '!=', OrderStatusEnum::Cancelled->value)
+            ->where('created_at', '>=', $range['from_utc'])
+            ->where('created_at', '<', $range['to_exclusive_utc'])
+            ->selectRaw("{$dayExpression} as day_of_week, {$hourExpression} as hour_of_day, COUNT(*) as orders")
+            ->groupByRaw("{$dayExpression}, {$hourExpression}")
+            ->get();
+
+        foreach ($rows as $row) {
+            $day = (int) $row->day_of_week;
+            $hour = (int) $row->hour_of_day;
+            $count = (int) $row->orders;
+            $grid[$day][$hour] = $count;
+            $max = max($max, $count);
         }
 
         return ['grid' => $grid, 'max' => $max];
+    }
+
+    /** @return array{string, string} */
+    private function localTimeExpressions(string $column): array
+    {
+        return match (DB::connection()->getDriverName()) {
+            'sqlite' => [
+                "CAST(strftime('%w', datetime({$column}, '+3 hours')) AS INTEGER)",
+                "CAST(strftime('%H', datetime({$column}, '+3 hours')) AS INTEGER)",
+            ],
+            'pgsql' => [
+                "EXTRACT(DOW FROM {$column} + INTERVAL '3 hours')",
+                "EXTRACT(HOUR FROM {$column} + INTERVAL '3 hours')",
+            ],
+            'sqlsrv' => [
+                "DATEDIFF(day, '19000107', CAST(DATEADD(hour, 3, {$column}) AS date)) % 7",
+                "DATEPART(hour, DATEADD(hour, 3, {$column}))",
+            ],
+            default => [
+                "DAYOFWEEK(DATE_ADD({$column}, INTERVAL 3 HOUR)) - 1",
+                "HOUR(DATE_ADD({$column}, INTERVAL 3 HOUR))",
+            ],
+        };
     }
 
     /**
@@ -182,18 +245,19 @@ class AnalyticsService
             ->where('orders.status', '!=', OrderStatusEnum::Cancelled->value)
             ->where('orders.created_at', '>=', $range['from_utc'])
             ->where('orders.created_at', '<', $range['to_exclusive_utc'])
-            ->selectRaw('services.name as name, SUM(order_items.quantity) as quantity, SUM(order_items.line_total) as revenue')
+            ->selectRaw('services.name as name, SUM(order_items.quantity) as quantity, SUM(order_items.line_total) as revenue, SUM(SUM(order_items.line_total)) OVER () as total_revenue')
             ->groupBy('services.name')
             ->orderByDesc('revenue')
+            ->limit(8)
             ->get();
 
-        $total = round($rows->sum(fn ($r) => (float) $r->revenue), 2);
-
-        return $rows->take(8)->map(fn ($r) => [
+        return $rows->map(fn ($r) => [
             'name' => $r->name,
             'quantity' => round((float) $r->quantity, 2),
             'revenue' => round((float) $r->revenue, 2),
-            'share' => $total > 0 ? round((float) $r->revenue / $total * 100, 2) : 0,
+            'share' => (float) $r->total_revenue > 0
+                ? round((float) $r->revenue / (float) $r->total_revenue * 100, 2)
+                : 0,
         ])->all();
     }
 
@@ -202,24 +266,34 @@ class AnalyticsService
      *
      * @param  array<int, int>  $branchIds
      * @param  array<string, mixed>  $range
-     * @param  Collection<int, Order>  $current
      */
-    private function repeatRate(array $branchIds, array $range, Collection $current): float
+    private function repeatRate(array $branchIds, array $range): float
     {
-        $customerIds = $current->pluck('customer_id')->filter()->unique()->values();
-
-        if ($customerIds->isEmpty()) {
-            return 0;
-        }
-
-        $repeats = Order::query()
+        $currentCustomers = Order::query()
             ->whereIn('branch_id', $branchIds)
-            ->whereIn('customer_id', $customerIds)
-            ->where('created_at', '<', $range['from_utc'])
-            ->distinct()
-            ->count('customer_id');
+            ->whereNotNull('customer_id')
+            ->where('status', '!=', OrderStatusEnum::Cancelled->value)
+            ->where('created_at', '>=', $range['from_utc'])
+            ->where('created_at', '<', $range['to_exclusive_utc'])
+            ->select('customer_id')
+            ->distinct();
 
-        return round($repeats / $customerIds->count() * 100, 2);
+        $priorCustomers = Order::query()
+            ->whereIn('branch_id', $branchIds)
+            ->whereNotNull('customer_id')
+            ->where('created_at', '<', $range['from_utc'])
+            ->select('customer_id')
+            ->distinct();
+
+        $row = DB::query()
+            ->fromSub($currentCustomers, 'current_customers')
+            ->leftJoinSub($priorCustomers, 'prior_customers', 'prior_customers.customer_id', '=', 'current_customers.customer_id')
+            ->selectRaw('COUNT(*) as customers, SUM(CASE WHEN prior_customers.customer_id IS NOT NULL THEN 1 ELSE 0 END) as repeats')
+            ->first();
+
+        $customers = (int) $row->customers;
+
+        return $customers > 0 ? round((int) $row->repeats / $customers * 100, 2) : 0;
     }
 
     /**
@@ -234,23 +308,22 @@ class AnalyticsService
         $cutoff = $now->subDays(self::CHURN_DAYS);
 
         $rows = Order::query()
-            ->whereIn('branch_id', $branchIds)
-            ->whereNotNull('customer_id')
-            ->where('status', '!=', OrderStatusEnum::Cancelled->value)
-            ->selectRaw('customer_id, COUNT(*) as orders, SUM(grand_total) as spent, MAX(created_at) as last_at')
-            ->groupBy('customer_id')
+            ->join('customers', 'customers.id', '=', 'orders.customer_id')
+            ->whereIn('orders.branch_id', $branchIds)
+            ->whereNotNull('orders.customer_id')
+            ->where('orders.status', '!=', OrderStatusEnum::Cancelled->value)
+            ->selectRaw('orders.customer_id, customers.name, customers.phone, COUNT(*) as orders, SUM(orders.grand_total) as spent, MAX(orders.created_at) as last_at')
+            ->groupBy('orders.customer_id', 'customers.name', 'customers.phone')
             ->havingRaw('COUNT(*) >= 2')
-            ->havingRaw('MAX(created_at) < ?', [$cutoff])
+            ->havingRaw('MAX(orders.created_at) < ?', [$cutoff])
             ->orderByDesc('spent')
             ->limit(12)
             ->get();
 
-        $names = Customer::query()->whereIn('id', $rows->pluck('customer_id'))->get(['id', 'name', 'phone'])->keyBy('id');
-
         return $rows->map(fn ($r) => [
             'id' => (int) $r->customer_id,
-            'name' => $names[$r->customer_id]->name ?? null,
-            'phone' => $names[$r->customer_id]->phone ?? null,
+            'name' => $r->name,
+            'phone' => $r->phone,
             'orders' => (int) $r->orders,
             'spent' => round((float) $r->spent, 2),
             'days_since' => (int) CarbonImmutable::parse($r->last_at)->diffInDays($now),

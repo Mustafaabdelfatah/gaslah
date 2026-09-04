@@ -9,8 +9,10 @@ use App\Models\Expense;
 use App\Models\Order;
 use App\Models\Shift;
 use App\Models\User;
+use App\Support\BusinessDateRange;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -431,11 +433,15 @@ class OrganizationService
     private function expensesByBranchAndCategory(int $organizationId, array $range): array
     {
         $grouped = [];
+        $rows = $this->periodExpenses($organizationId, $range)
+            ->selectRaw('branch_id, category, COALESCE(SUM(amount), 0) as total')
+            ->groupBy('branch_id', 'category')
+            ->get();
 
-        foreach ($this->periodExpenses($organizationId, $range)->get(['branch_id', 'category', 'amount']) as $expense) {
-            $key = $expense->branch_id ?? 0;
-            $category = $expense->category?->value ?? 'other';
-            $grouped[$key][$category] = round(($grouped[$key][$category] ?? 0) + (float) $expense->amount, 2);
+        foreach ($rows as $row) {
+            $key = $row->branch_id ?? 0;
+            $category = is_object($row->category) ? $row->category->value : ($row->category ?? 'other');
+            $grouped[$key][$category] = round((float) $row->total, 2);
         }
 
         return $grouped;
@@ -460,32 +466,33 @@ class OrganizationService
     }
 
     /**
-     * Shift totals per person. The hours are summed in PHP because the SQL for a
-     * timestamp difference is dialect-specific and this project runs on more than one.
+     * Shift totals per person. The duration expression is dialect-specific, but the
+     * aggregation remains in SQL so a long report never hydrates every historical shift.
      *
      * @param  array<string, mixed>  $range
      * @return array<int, array{shifts_count: int, shift_hours: float, cash_variance: float}>
      */
     private function shiftTotalsByUser(int $organizationId, array $range, ?int $branchId): array
     {
-        $totals = [];
+        $duration = match (DB::connection()->getDriverName()) {
+            'sqlite' => '(julianday(closed_at) - julianday(opened_at)) * 24',
+            'pgsql' => 'EXTRACT(EPOCH FROM (closed_at - opened_at)) / 3600',
+            'sqlsrv' => 'DATEDIFF(second, opened_at, closed_at) / 3600.0',
+            default => 'TIMESTAMPDIFF(SECOND, opened_at, closed_at) / 3600',
+        };
 
-        $shifts = $this->periodShifts($organizationId, $range)
+        return $this->periodShifts($organizationId, $range)
             ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
-            ->get(['user_id', 'opened_at', 'closed_at', 'variance']);
-
-        foreach ($shifts as $shift) {
-            $id = $shift->user_id;
-            $totals[$id] ??= ['shifts_count' => 0, 'shift_hours' => 0.0, 'cash_variance' => 0.0];
-            $totals[$id]['shifts_count']++;
-            $totals[$id]['cash_variance'] += (float) $shift->variance;
-
-            if ($shift->closed_at !== null) {
-                $totals[$id]['shift_hours'] += $shift->opened_at->diffInMinutes($shift->closed_at) / 60;
-            }
-        }
-
-        return $totals;
+            ->selectRaw("user_id, COUNT(*) as shifts_count, COALESCE(SUM(variance), 0) as cash_variance, COALESCE(SUM(CASE WHEN closed_at IS NULL THEN 0 ELSE {$duration} END), 0) as shift_hours")
+            ->groupBy('user_id')
+            ->get()
+            ->keyBy('user_id')
+            ->map(fn ($row) => [
+                'shifts_count' => (int) $row->shifts_count,
+                'shift_hours' => round((float) $row->shift_hours, 2),
+                'cash_variance' => round((float) $row->cash_variance, 2),
+            ])
+            ->all();
     }
 
     /**
@@ -523,11 +530,10 @@ class OrganizationService
     {
         return Expense::query()
             ->where('organization_id', $organizationId)
-            // whereDate, not whereBetween: SQLite keeps a date column as a full
-            // timestamp string, so '2026-08-31 00:00:00' sorts after the bare
-            // '2026-08-31' bound and the last day of the window drops out.
-            ->whereDate('date', '>=', $range['from'])
-            ->whereDate('date', '<=', $range['to']);
+            // Inclusive-exclusive bounds work for MySQL DATE and SQLite's timestamp
+            // representation while keeping the organization/date index sargable.
+            ->where('date', '>=', $range['from'])
+            ->where('date', '<', BusinessDateRange::dayAfter($range['to']));
     }
 
     /**

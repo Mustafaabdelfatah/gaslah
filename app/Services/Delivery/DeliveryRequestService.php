@@ -11,6 +11,8 @@ use App\Models\DeliveryRequest;
 use App\Models\DeliveryZone;
 use App\Models\Driver;
 use App\Services\Orders\PosService;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -25,11 +27,6 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class DeliveryRequestService
 {
-    /**
-     * Statuses that count as an open trip on a driver.
-     */
-    private const OPEN_STATUSES = ['assigned', 'picked_up', 'out_for_delivery'];
-
     public function __construct(
         private readonly DeliveryService $delivery,
         private readonly DeliverySettingsService $settingsService,
@@ -188,17 +185,40 @@ class DeliveryRequestService
     public function stats(array $branchIds): array
     {
         $since = Carbon::now()->subDays(90);
-        $base = fn () => DeliveryRequest::query()->inBranches($branchIds);
-
-        $window = (clone $base())->where('created_at', '>=', $since);
+        $row = DeliveryRequest::query()
+            ->inBranches($branchIds)
+            ->selectRaw(
+                'SUM(CASE WHEN status = ? AND driver_id IS NULL THEN 1 ELSE 0 END) as pending_assignment,
+                 SUM(CASE WHEN type = ? AND status IN (?, ?) THEN 1 ELSE 0 END) as in_pickup,
+                 SUM(CASE WHEN type = ? AND status IN (?, ?, ?) THEN 1 ELSE 0 END) as in_delivery,
+                 SUM(CASE WHEN created_at >= ? AND status = ? THEN 1 ELSE 0 END) as delivered,
+                 SUM(CASE WHEN created_at >= ? AND status = ? THEN 1 ELSE 0 END) as cancelled,
+                 SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) as total',
+                [
+                    DeliveryStatusEnum::Requested->value,
+                    DeliveryTypeEnum::Pickup->value,
+                    DeliveryStatusEnum::Assigned->value,
+                    DeliveryStatusEnum::PickedUp->value,
+                    DeliveryTypeEnum::Delivery->value,
+                    DeliveryStatusEnum::Assigned->value,
+                    DeliveryStatusEnum::PickedUp->value,
+                    DeliveryStatusEnum::OutForDelivery->value,
+                    $since,
+                    DeliveryStatusEnum::Delivered->value,
+                    $since,
+                    DeliveryStatusEnum::Cancelled->value,
+                    $since,
+                ],
+            )
+            ->first();
 
         return [
-            'pending_assignment' => (clone $base())->where('status', DeliveryStatusEnum::Requested->value)->whereNull('driver_id')->count(),
-            'in_pickup' => (clone $base())->where('type', DeliveryTypeEnum::Pickup->value)->whereIn('status', ['assigned', 'picked_up'])->count(),
-            'in_delivery' => (clone $base())->where('type', DeliveryTypeEnum::Delivery->value)->whereIn('status', self::OPEN_STATUSES)->count(),
-            'delivered' => (clone $window)->where('status', DeliveryStatusEnum::Delivered->value)->count(),
-            'cancelled' => (clone $window)->where('status', DeliveryStatusEnum::Cancelled->value)->count(),
-            'total' => (clone $window)->count(),
+            'pending_assignment' => (int) $row->pending_assignment,
+            'in_pickup' => (int) $row->in_pickup,
+            'in_delivery' => (int) $row->in_delivery,
+            'delivered' => (int) $row->delivered,
+            'cancelled' => (int) $row->cancelled,
+            'total' => (int) $row->total,
             'active_drivers' => Driver::query()->active()->where('is_platform', false)->whereIn('branch_id', $branchIds)->count(),
             'avg_delivery_minutes' => $this->avgDeliveryMinutes($branchIds, $since),
             'avg_service_minutes' => $this->avgServiceMinutes($branchIds, $since),
@@ -234,24 +254,15 @@ class DeliveryRequestService
      */
     private function avgDeliveryMinutes(array $branchIds, Carbon $since): ?float
     {
-        $rows = DeliveryRequest::query()
+        $query = DeliveryRequest::query()
             ->inBranches($branchIds)
             ->where('type', DeliveryTypeEnum::Delivery->value)
             ->where('status', DeliveryStatusEnum::Delivered->value)
             ->whereNotNull('assigned_at')
             ->whereNotNull('completed_at')
-            ->where('completed_at', '>=', $since)
-            ->get(['assigned_at', 'completed_at']);
+            ->where('completed_at', '>=', $since);
 
-        if ($rows->isEmpty()) {
-            return null;
-        }
-
-        $minutes = $rows
-            ->map(fn (DeliveryRequest $r) => $r->assigned_at->diffInSeconds($r->completed_at, false) / 60)
-            ->filter(fn (float $minutes) => $minutes >= 0);
-
-        return $minutes->isEmpty() ? null : round($minutes->avg(), 1);
+        return $this->averageMinutes($query, 'assigned_at', 'completed_at');
     }
 
     /**
@@ -262,35 +273,41 @@ class DeliveryRequestService
      */
     private function avgServiceMinutes(array $branchIds, Carbon $since): ?float
     {
-        $deliveries = DeliveryRequest::query()
-            ->inBranches($branchIds)
-            ->where('type', DeliveryTypeEnum::Delivery->value)
-            ->where('status', DeliveryStatusEnum::Delivered->value)
-            ->whereNotNull('order_id')
-            ->whereNotNull('completed_at')
-            ->where('completed_at', '>=', $since)
-            ->get(['order_id', 'completed_at']);
-
-        if ($deliveries->isEmpty()) {
-            return null;
-        }
-
         $pickupStarts = DeliveryRequest::query()
             ->inBranches($branchIds)
             ->where('type', DeliveryTypeEnum::Pickup->value)
-            ->whereIn('order_id', $deliveries->pluck('order_id')->unique())
-            ->get(['order_id', 'created_at'])
-            ->groupBy('order_id')
-            ->map(fn (Collection $rows) => $rows->min('created_at'));
+            ->whereNotNull('order_id')
+            ->selectRaw('order_id, MIN(created_at) as pickup_started_at')
+            ->groupBy('order_id');
 
-        $minutes = $deliveries
-            ->filter(fn (DeliveryRequest $request) => $pickupStarts->has($request->order_id))
-            ->map(function (DeliveryRequest $request) use ($pickupStarts): float {
-                return Carbon::parse($pickupStarts->get($request->order_id))
-                    ->diffInSeconds($request->completed_at, false) / 60;
-            })
-            ->filter(fn (float $minutes) => $minutes >= 0);
+        $query = DB::table('delivery_requests as deliveries')
+            ->joinSub($pickupStarts, 'pickups', 'pickups.order_id', '=', 'deliveries.order_id')
+            ->whereIn('deliveries.branch_id', $branchIds)
+            ->where('deliveries.type', DeliveryTypeEnum::Delivery->value)
+            ->where('deliveries.status', DeliveryStatusEnum::Delivered->value)
+            ->whereNotNull('deliveries.completed_at')
+            ->where('deliveries.completed_at', '>=', $since);
 
-        return $minutes->isEmpty() ? null : round($minutes->avg(), 1);
+        return $this->averageMinutes($query, 'pickups.pickup_started_at', 'deliveries.completed_at');
+    }
+
+    /**
+     * Let the database calculate an average instead of hydrating every matching trip.
+     */
+    private function averageMinutes(EloquentBuilder|QueryBuilder $query, string $startColumn, string $endColumn): ?float
+    {
+        $duration = match (DB::connection()->getDriverName()) {
+            'sqlite' => "(julianday({$endColumn}) - julianday({$startColumn})) * 1440.0",
+            'pgsql' => "EXTRACT(EPOCH FROM ({$endColumn} - {$startColumn})) / 60.0",
+            'sqlsrv' => "DATEDIFF(second, {$startColumn}, {$endColumn}) / 60.0",
+            default => "TIMESTAMPDIFF(SECOND, {$startColumn}, {$endColumn}) / 60.0",
+        };
+
+        $row = $query
+            ->whereColumn($endColumn, '>=', $startColumn)
+            ->selectRaw("AVG({$duration}) as average_minutes")
+            ->first();
+
+        return $row?->average_minutes === null ? null : round((float) $row->average_minutes, 1);
     }
 }

@@ -12,8 +12,11 @@ use App\Models\Organization;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\ServiceCategory;
+use App\Services\Reports\ReportRangeService;
+use App\Services\Reports\ReportService;
 use Database\Seeders\FeatureSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ReportApiTest extends TestCase
@@ -60,6 +63,23 @@ class ReportApiTest extends TestCase
             ->assertJsonPath('data.summary.outstanding', 150);
     }
 
+    public function test_the_report_screen_can_load_each_access_level_in_one_request(): void
+    {
+        $this->actingAsStaff($this->createStaff($this->branch, StaffRoleEnum::SuperAdmin));
+        $order = $this->order(['grand_total' => 200, 'paid_total' => 100]);
+        $order->items()->create(['service_id' => $this->service->getKey(), 'quantity' => 2, 'unit_price' => 100, 'line_total' => 200]);
+
+        $this->getJson('/api/reports/overview')
+            ->assertOk()
+            ->assertJsonPath('data.sales.summary.orders', 1)
+            ->assertJsonPath('data.top_products.services.0.name', 'Wash');
+
+        $this->getJson('/api/reports/management-overview?limit=5')
+            ->assertOk()
+            ->assertJsonPath('data.top_customers.0.customer_id', $this->customer->getKey())
+            ->assertJsonPath('data.cancellation_rate.total_orders', 1);
+    }
+
     public function test_the_payment_breakdown_splits_online_and_subscription(): void
     {
         $this->actingAsStaff($this->createStaff($this->branch, StaffRoleEnum::SuperAdmin));
@@ -75,10 +95,23 @@ class ReportApiTest extends TestCase
         // Subscription-covered order: paid, no payment row.
         $this->order(['grand_total' => 100, 'paid_total' => 100, 'subscription_id' => 1]);
 
-        $names = collect($this->getJson('/api/reports/sales')->json('data.by_payment_method'))->pluck('name');
+        $response = $this->getJson('/api/reports/sales')->assertOk();
+
+        $names = collect($response->json('data.by_payment_method'))->pluck('name');
         $this->assertTrue($names->contains('نقدي'));
         $this->assertTrue($names->contains('أونلاين'));
         $this->assertTrue($names->contains('اشتراك'));
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        app(ReportService::class)->sales(
+            [$this->branch->getKey()],
+            app(ReportRangeService::class)->resolve(null, null),
+        );
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $this->assertLessThanOrEqual(4, count($queries), 'The sales report must stay within four aggregate queries.');
     }
 
     public function test_top_products_aggregates_line_items(): void

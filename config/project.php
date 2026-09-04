@@ -100,7 +100,7 @@ return [
     */
     'pagination' => [
         'per_page' => 10,
-        'max' => 1000,
+        'max' => 200,
     ],
 
     /*

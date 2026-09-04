@@ -11,6 +11,7 @@ use App\Models\Account;
 use App\Models\JournalEntry;
 use App\Services\Accounting\BooksLockService;
 use App\Services\Accounting\JournalPostingService;
+use App\Support\BusinessDateRange;
 use Illuminate\Http\JsonResponse;
 
 class JournalController extends TenantController
@@ -29,8 +30,8 @@ class JournalController extends TenantController
             ->where('organization_id', $this->organizationId())
             ->with('lines')
             ->when($request->filled('source'), fn ($q) => $q->where('source', $request->input('source')))
-            ->when($request->filled('from'), fn ($q) => $q->whereDate('date', '>=', $request->input('from')))
-            ->when($request->filled('to'), fn ($q) => $q->whereDate('date', '<=', $request->input('to')))
+            ->when($request->filled('from'), fn ($q) => $q->where('date', '>=', $request->input('from')))
+            ->when($request->filled('to'), fn ($q) => $q->where('date', '<', BusinessDateRange::dayAfter($request->input('to'))))
             ->latest('entry_no');
 
         return successResponse(wrapPaginate($query, JournalEntryResource::class));

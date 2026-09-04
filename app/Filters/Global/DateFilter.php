@@ -2,7 +2,7 @@
 
 namespace App\Filters\Global;
 
-use Carbon\Carbon;
+use App\Support\BusinessDateRange;
 use Closure;
 
 class DateFilter
@@ -12,11 +12,11 @@ class DateFilter
         $query = $next($request);
 
         if (! empty(request('start'))) {
-            $query->whereDate('created_at', '>=', Carbon::parse(request('start'))->format('Y-m-d'));
+            $query->where('created_at', '>=', BusinessDateRange::startUtc(request('start')));
         }
 
         if (! empty(request('end'))) {
-            $query->whereDate('created_at', '<=', Carbon::parse(request('end'))->format('Y-m-d'));
+            $query->where('created_at', '<', BusinessDateRange::endExclusiveUtc(request('end')));
         }
 
         return $query;

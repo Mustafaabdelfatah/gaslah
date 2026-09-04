@@ -4,10 +4,10 @@ namespace App\Services\Accounting;
 
 use App\Enum\Accounting\AccountTypeEnum;
 use App\Enum\Accounting\SystemAccountEnum;
-use App\Enum\Orders\PaymentStatusEnum;
 use App\Models\Account;
 use App\Models\Order;
-use Illuminate\Support\Carbon;
+use App\Support\BusinessDateRange;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -30,8 +30,8 @@ class AccountingReportService
         $rows = DB::table('journal_lines')
             ->join('journal_entries', 'journal_lines.journal_entry_id', '=', 'journal_entries.id')
             ->where('journal_lines.organization_id', $organizationId)
-            ->when(! $cumulative && ! empty($filter['from']), fn ($q) => $q->whereDate('journal_entries.date', '>=', $filter['from']))
-            ->when(! empty($filter['to']), fn ($q) => $q->whereDate('journal_entries.date', '<=', $filter['to']))
+            ->when(! $cumulative && ! empty($filter['from']), fn ($q) => $q->where('journal_entries.date', '>=', $filter['from']))
+            ->when(! empty($filter['to']), fn ($q) => $q->where('journal_entries.date', '<', BusinessDateRange::dayAfter($filter['to'])))
             ->when(! empty($filter['branch_id']), fn ($q) => $q->where('journal_lines.branch_id', $filter['branch_id']))
             ->groupBy('journal_lines.account_id')
             ->selectRaw('journal_lines.account_id, SUM(journal_lines.debit) AS debit, SUM(journal_lines.credit) AS credit')
@@ -85,21 +85,7 @@ class AccountingReportService
      */
     public function incomeStatement(int $organizationId, array $filter = []): array
     {
-        $balances = $this->balancesByAccount($organizationId, $filter);
-
-        $revenue = $balances->filter(fn (array $row) => $row['account']->type === AccountTypeEnum::Revenue);
-        $expenses = $balances->filter(fn (array $row) => $row['account']->type === AccountTypeEnum::Expense);
-
-        $totalRevenue = round($revenue->sum('balance'), 2);
-        $totalExpenses = round($expenses->sum('balance'), 2);
-
-        return [
-            'revenue' => $this->presentBalances($revenue),
-            'expenses' => $this->presentBalances($expenses),
-            'total_revenue' => $totalRevenue,
-            'total_expenses' => $totalExpenses,
-            'net_income' => round($totalRevenue - $totalExpenses, 2),
-        ];
+        return $this->incomeFromBalances($this->balancesByAccount($organizationId, $filter));
     }
 
     /**
@@ -126,7 +112,11 @@ class AccountingReportService
             includeZero: true,
         )->keyBy(fn (array $row) => $row['account']->system_key);
 
-        $income = $this->incomeStatement($organizationId, $filter);
+        // With no lower bound, the cumulative and period balances are identical.
+        // Reuse the rows instead of issuing the same aggregate and account query twice.
+        $income = empty($filter['from'])
+            ? $this->incomeFromBalances($cumulative->values())
+            : $this->incomeStatement($organizationId, $filter);
 
         // "No bank" means nothing was ever booked to it, not that the account is
         // missing — the default chart always creates one.
@@ -162,60 +152,67 @@ class AccountingReportService
      */
     public function receivables(int $organizationId, array $branchIds = []): array
     {
-        $today = Carbon::now()->startOfDay();
+        $timezone = (string) config('project.project.timezone', 'Asia/Riyadh');
+        $today = CarbonImmutable::now($timezone)->startOfDay();
+        $currentCutoff = $today->subDays(30)->utc();
+        $day30Cutoff = $today->subDays(60)->utc();
+        $day60Cutoff = $today->subDays(90)->utc();
 
-        $orders = Order::query()
-            ->where('organization_id', $organizationId)
-            ->when($branchIds !== [], fn ($q) => $q->whereIn('branch_id', $branchIds))
-            ->whereIn('payment_status', [
-                PaymentStatusEnum::Unpaid->value,
-                PaymentStatusEnum::Partial->value,
-                PaymentStatusEnum::Deferred->value,
-            ])
-            ->whereRaw('grand_total > paid_total')
-            ->with('customer:id,name,phone')
+        $rows = Order::query()
+            ->where('orders.organization_id', $organizationId)
+            ->when($branchIds !== [], fn ($q) => $q->whereIn('orders.branch_id', $branchIds))
+            ->outstanding()
+            ->leftJoin('customers', 'customers.id', '=', 'orders.customer_id')
+            ->selectRaw(
+                'orders.customer_id, customers.name, customers.phone,
+                 COUNT(*) as orders_count,
+                 MIN(orders.created_at) as oldest_at,
+                 COALESCE(SUM(orders.grand_total - orders.paid_total), 0) as due,
+                 COALESCE(SUM(CASE WHEN orders.created_at >= ? THEN orders.grand_total - orders.paid_total ELSE 0 END), 0) as current_due,
+                 COALESCE(SUM(CASE WHEN orders.created_at >= ? AND orders.created_at < ? THEN orders.grand_total - orders.paid_total ELSE 0 END), 0) as d30_due,
+                 COALESCE(SUM(CASE WHEN orders.created_at >= ? AND orders.created_at < ? THEN orders.grand_total - orders.paid_total ELSE 0 END), 0) as d60_due,
+                 COALESCE(SUM(CASE WHEN orders.created_at < ? THEN orders.grand_total - orders.paid_total ELSE 0 END), 0) as d90_due',
+                [
+                    $currentCutoff,
+                    $day30Cutoff, $currentCutoff,
+                    $day60Cutoff, $day30Cutoff,
+                    $day60Cutoff,
+                ],
+            )
+            ->groupBy('orders.customer_id', 'customers.name', 'customers.phone')
+            ->orderByDesc('due')
             ->get();
 
-        $buckets = ['current' => 0.0, 'd30' => 0.0, 'd60' => 0.0, 'd90' => 0.0];
+        $buckets = [
+            'current' => round((float) $rows->sum('current_due'), 2),
+            'd30' => round((float) $rows->sum('d30_due'), 2),
+            'd60' => round((float) $rows->sum('d60_due'), 2),
+            'd90' => round((float) $rows->sum('d90_due'), 2),
+        ];
 
-        $customers = $orders
-            ->groupBy('customer_id')
-            ->map(function ($rows) use ($today, &$buckets) {
-                $due = 0.0;
-                $oldestDays = 0;
+        $customers = $rows->map(function ($row) use ($today, $timezone): array {
+            $oldestDays = (int) CarbonImmutable::parse($row->oldest_at)
+                ->setTimezone($timezone)
+                ->startOfDay()
+                ->diffInDays($today);
 
-                foreach ($rows as $order) {
-                    $remaining = round((float) $order->grand_total - (float) $order->paid_total, 2);
-                    // Oldest-first direction: the debt's own date up to today.
-                    $days = (int) Carbon::parse($order->created_at)->startOfDay()->diffInDays($today);
-                    $due += $remaining;
-                    $oldestDays = max($oldestDays, $days);
-
-                    $buckets[$this->agingBucket($days)] += $remaining;
-                }
-
-                $first = $rows->first();
-
-                return [
-                    'customer' => [
-                        'id' => $first->customer?->id,
-                        'name' => $first->customer?->name,
-                        'phone' => $first->customer?->phone,
-                    ],
-                    'orders_count' => $rows->count(),
-                    'due' => round($due, 2),
-                    'oldest_days' => $oldestDays,
-                    'bucket' => $this->agingBucket($oldestDays),
-                ];
-            })
-            ->sortByDesc('due')
-            ->values()
-            ->all();
+            return [
+                'customer' => [
+                    'id' => $row->customer_id === null ? null : (int) $row->customer_id,
+                    'name' => $row->name,
+                    'phone' => $row->phone,
+                ],
+                'orders_count' => (int) $row->orders_count,
+                'due' => round((float) $row->due, 2),
+                'oldest_days' => $oldestDays,
+                'bucket' => $this->agingBucket($oldestDays),
+            ];
+        })->all();
 
         return [
             'as_of' => $today->toDateString(),
-            'total' => round(array_sum(array_column($customers, 'due')), 2),
-            'buckets' => array_map(fn (float $v) => round($v, 2), $buckets),
+            'total' => round((float) $rows->sum('due'), 2),
+            'buckets' => $buckets,
             'customers' => $customers,
         ];
     }
@@ -240,7 +237,7 @@ class AccountingReportService
      */
     public function balanceSheet(int $organizationId, ?string $asOf = null, ?int $branchId = null): array
     {
-        $filter = ['to' => $asOf ?? Carbon::now()->toDateString(), 'branch_id' => $branchId];
+        $filter = ['to' => $asOf ?? CarbonImmutable::now()->toDateString(), 'branch_id' => $branchId];
         $balances = $this->balancesByAccount($organizationId, $filter, cumulative: true);
 
         $assets = $balances->filter(fn (array $row) => $row['account']->type === AccountTypeEnum::Asset);
@@ -281,8 +278,8 @@ class AccountingReportService
         $rows = DB::table('journal_lines')
             ->join('journal_entries', 'journal_lines.journal_entry_id', '=', 'journal_entries.id')
             ->where('journal_lines.account_id', $account->getKey())
-            ->when($from, fn ($q) => $q->whereDate('journal_entries.date', '>=', $from))
-            ->when($to, fn ($q) => $q->whereDate('journal_entries.date', '<=', $to))
+            ->when($from, fn ($q) => $q->where('journal_entries.date', '>=', $from))
+            ->when($to, fn ($q) => $q->where('journal_entries.date', '<', BusinessDateRange::dayAfter($to)))
             ->orderBy('journal_entries.date')
             ->orderBy('journal_entries.entry_no')
             ->select('journal_entries.entry_no', 'journal_entries.date', 'journal_entries.memo', 'journal_entries.source', 'journal_lines.debit', 'journal_lines.credit')
@@ -354,7 +351,7 @@ class AccountingReportService
         $row = DB::table('journal_lines')
             ->join('journal_entries', 'journal_lines.journal_entry_id', '=', 'journal_entries.id')
             ->where('journal_lines.account_id', $account->getKey())
-            ->whereDate('journal_entries.date', '<', $from)
+            ->where('journal_entries.date', '<', $from)
             ->selectRaw('COALESCE(SUM(journal_lines.debit),0) AS debit, COALESCE(SUM(journal_lines.credit),0) AS credit')
             ->first();
 
@@ -375,6 +372,26 @@ class AccountingReportService
         return $credit
             ? round($row['credit'] - $row['debit'], 2)
             : round($row['debit'] - $row['credit'], 2);
+    }
+
+    /**
+     * @param  Collection<int, array{account: Account, debit: float, credit: float, balance: float}>  $balances
+     * @return array<string, mixed>
+     */
+    private function incomeFromBalances(Collection $balances): array
+    {
+        $revenue = $balances->filter(fn (array $row) => $row['account']->type === AccountTypeEnum::Revenue);
+        $expenses = $balances->filter(fn (array $row) => $row['account']->type === AccountTypeEnum::Expense);
+        $totalRevenue = round($revenue->sum('balance'), 2);
+        $totalExpenses = round($expenses->sum('balance'), 2);
+
+        return [
+            'revenue' => $this->presentBalances($revenue),
+            'expenses' => $this->presentBalances($expenses),
+            'total_revenue' => $totalRevenue,
+            'total_expenses' => $totalExpenses,
+            'net_income' => round($totalRevenue - $totalExpenses, 2),
+        ];
     }
 
     /**

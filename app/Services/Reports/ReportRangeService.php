@@ -3,6 +3,7 @@
 namespace App\Services\Reports;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Resolves a reporting date range in the business timezone (Asia/Riyadh).
@@ -61,6 +62,20 @@ class ReportRangeService
     public function dayKey(\DateTimeInterface $utc): string
     {
         return CarbonImmutable::instance($utc)->setTimezone(self::TIMEZONE)->format('Y-m-d');
+    }
+
+    /**
+     * SQL expression that groups a UTC timestamp by its Riyadh calendar date.
+     * Riyadh is UTC+3 year-round, so this does not depend on database timezone tables.
+     */
+    public function localDateExpression(string $column): string
+    {
+        return match (DB::connection()->getDriverName()) {
+            'sqlite' => "date({$column}, '+3 hours')",
+            'pgsql' => "DATE({$column} + INTERVAL '3 hours')",
+            'sqlsrv' => "CAST(DATEADD(hour, 3, {$column}) AS date)",
+            default => "DATE(DATE_ADD({$column}, INTERVAL 3 HOUR))",
+        };
     }
 
     /**

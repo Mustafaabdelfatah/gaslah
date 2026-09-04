@@ -226,16 +226,18 @@ class PayablesService
     public function suppliers(int $organizationId, array $branchIds): Collection
     {
         $balances = Payable::query()
-            ->forOrganization($organizationId)
-            ->open()
-            ->whereNotNull('supplier_id')
-            ->whereHas('expense', fn ($query) => $query->where(
-                fn ($scope) => $scope->whereNull('branch_id')->orWhereIn('branch_id', $branchIds),
-            ))
-            ->with('expense:id,amount')
+            ->where('payables.organization_id', $organizationId)
+            ->where('payables.status', PayableStatusEnum::Open->value)
+            ->whereNotNull('payables.supplier_id')
+            ->join('expenses', 'expenses.id', '=', 'payables.expense_id')
+            ->where(
+                fn ($scope) => $scope->whereNull('expenses.branch_id')->orWhereIn('expenses.branch_id', $branchIds),
+            )
+            ->selectRaw('payables.supplier_id, SUM(expenses.amount) as total')
+            ->groupBy('payables.supplier_id')
             ->get()
-            ->groupBy('supplier_id')
-            ->map(fn (Collection $rows) => round($rows->sum(fn (Payable $bill) => (float) $bill->expense->amount), 2));
+            ->pluck('total', 'supplier_id')
+            ->map(fn ($total) => round((float) $total, 2));
 
         return Supplier::query()
             ->forOrganization($organizationId)
@@ -384,7 +386,7 @@ class PayablesService
         $templates = RecurringBill::query()
             ->forOrganization($organizationId)
             ->where('is_active', true)
-            ->whereDate('next_run', '<=', $today)
+            ->where('next_run', '<', $today->copy()->addDay()->toDateString())
             ->get();
 
         foreach ($templates as $template) {

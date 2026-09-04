@@ -3,10 +3,11 @@
 namespace App\Services\Reports;
 
 use App\Enum\Orders\OrderStatusEnum;
+use App\Enum\Orders\PaymentStatusEnum;
 use App\Models\Customer;
 use App\Models\Order;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The operational dashboard: today's and yesterday's KPIs, the live workflow stages,
@@ -37,11 +38,68 @@ class DashboardService
         $active = fn () => $inBranches()->whereNull('archived_at')->where('status', '!=', OrderStatusEnum::Cancelled->value);
         $due = fn () => (clone $active())->outstanding();
 
+        $daily = $inBranches()
+            ->where('created_at', '>=', $yesterdayStart)
+            ->where('created_at', '<', $tomorrowStart)
+            ->selectRaw(
+                'SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END) as orders_today,
+                 SUM(CASE WHEN created_at >= ? AND created_at < ? AND status != ? THEN grand_total ELSE 0 END) as revenue_today,
+                 SUM(CASE WHEN created_at >= ? AND created_at < ? THEN 1 ELSE 0 END) as orders_yesterday,
+                 SUM(CASE WHEN created_at >= ? AND created_at < ? AND status != ? THEN grand_total ELSE 0 END) as revenue_yesterday',
+                [
+                    $todayStart, $tomorrowStart,
+                    $todayStart, $tomorrowStart, OrderStatusEnum::Cancelled->value,
+                    $yesterdayStart, $todayStart,
+                    $yesterdayStart, $todayStart, OrderStatusEnum::Cancelled->value,
+                ],
+            )
+            ->first();
+
+        $dueStatuses = [
+            PaymentStatusEnum::Unpaid->value,
+            PaymentStatusEnum::Partial->value,
+            PaymentStatusEnum::Deferred->value,
+        ];
+        $activeSummary = $active()
+            ->selectRaw(
+                'SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as ready_orders,
+                 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as received_orders,
+                 SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as processing_orders,
+                 SUM(CASE WHEN due_at IS NOT NULL AND due_at < ? AND status IN (?, ?, ?) THEN 1 ELSE 0 END) as late_orders,
+                 COALESCE(SUM(paid_total), 0) as collected,
+                 COALESCE(SUM(grand_total), 0) as billed,
+                 SUM(CASE WHEN payment_status IN (?, ?, ?) AND paid_total < grand_total THEN 1 ELSE 0 END) as unpaid_count,
+                 COALESCE(SUM(CASE WHEN payment_status IN (?, ?, ?) AND paid_total < grand_total THEN grand_total - paid_total ELSE 0 END), 0) as unpaid_amount',
+                [
+                    OrderStatusEnum::Ready->value,
+                    OrderStatusEnum::Received->value,
+                    OrderStatusEnum::Processing->value,
+                    $nowUtc,
+                    OrderStatusEnum::Received->value,
+                    OrderStatusEnum::Processing->value,
+                    OrderStatusEnum::Ready->value,
+                    ...$dueStatuses,
+                    ...$dueStatuses,
+                ],
+            )
+            ->first();
+
+        $completed = $inBranches()
+            ->selectRaw(
+                'SUM(CASE WHEN status = ? AND delivered_at >= ? AND delivered_at < ? THEN 1 ELSE 0 END) as delivered_today,
+                 SUM(CASE WHEN archived_at IS NOT NULL AND created_at >= ? AND created_at < ? THEN 1 ELSE 0 END) as archived_today',
+                [OrderStatusEnum::Delivered->value, $todayStart, $tomorrowStart, $todayStart, $tomorrowStart],
+            )
+            ->first();
+
+        $collected = round((float) $activeSummary->collected, 2);
+        $billed = round((float) $activeSummary->billed, 2);
+
         return [
-            'orders_today' => (clone $inBranches())->whereBetween('created_at', [$todayStart, $tomorrowStart])->count(),
-            'revenue_today' => $this->revenue((clone $inBranches())->whereBetween('created_at', [$todayStart, $tomorrowStart])),
-            'orders_yesterday' => (clone $inBranches())->whereBetween('created_at', [$yesterdayStart, $todayStart])->count(),
-            'revenue_yesterday' => $this->revenue((clone $inBranches())->whereBetween('created_at', [$yesterdayStart, $todayStart])),
+            'orders_today' => (int) $daily->orders_today,
+            'revenue_today' => round((float) $daily->revenue_today, 2),
+            'orders_yesterday' => (int) $daily->orders_yesterday,
+            'revenue_yesterday' => round((float) $daily->revenue_yesterday, 2),
 
             'inactive_customers' => $this->inactiveCustomers($branchIds, $now),
             'new_customers' => Customer::query()
@@ -50,29 +108,27 @@ class DashboardService
                 ->whereBetween('created_at', [$todayStart, $tomorrowStart])
                 ->count(),
 
-            'ready_orders' => (clone $active())->where('status', OrderStatusEnum::Ready->value)->count(),
-            'late_orders' => (clone $active())
-                ->whereIn('status', [OrderStatusEnum::Received->value, OrderStatusEnum::Processing->value, OrderStatusEnum::Ready->value])
-                ->whereNotNull('due_at')
-                ->where('due_at', '<', $nowUtc)
-                ->count(),
+            'ready_orders' => (int) $activeSummary->ready_orders,
+            'late_orders' => (int) $activeSummary->late_orders,
 
             'stages' => [
-                'received' => (clone $active())->where('status', OrderStatusEnum::Received->value)->count(),
-                'processing' => (clone $active())->where('status', OrderStatusEnum::Processing->value)->count(),
-                'ready' => (clone $active())->where('status', OrderStatusEnum::Ready->value)->count(),
-                'delivered' => (clone $inBranches())->where('status', OrderStatusEnum::Delivered->value)->whereBetween('delivered_at', [$todayStart, $tomorrowStart])->count(),
+                'received' => (int) $activeSummary->received_orders,
+                'processing' => (int) $activeSummary->processing_orders,
+                'ready' => (int) $activeSummary->ready_orders,
+                'delivered' => (int) $completed->delivered_today,
             ],
 
-            'collected' => $this->sum((clone $active()), 'paid_total'),
-            'outstanding' => round(max(0, $this->sum((clone $active()), 'grand_total') - $this->sum((clone $active()), 'paid_total')), 2),
-            'unpaid_count' => $due()->count(),
-            'unpaid_amount' => $this->outstandingSum($due()),
-            'archived_count' => (clone $inBranches())->whereNotNull('archived_at')->whereBetween('created_at', [$todayStart, $tomorrowStart])->count(),
+            'collected' => $collected,
+            'outstanding' => round(max(0, $billed - $collected), 2),
+            'unpaid_count' => (int) $activeSummary->unpaid_count,
+            'unpaid_amount' => round(max(0, (float) $activeSummary->unpaid_amount), 2),
+            'archived_count' => (int) $completed->archived_today,
 
-            'recent' => (clone $active())->with('customer:id,name')->latest('id')->limit(8)->get()
+            'recent' => (clone $active())->select(['id', 'customer_id', 'order_no', 'status', 'grand_total', 'created_at'])
+                ->with('customer:id,name')->latest('id')->limit(8)->get()
                 ->map(fn (Order $o) => ['id' => $o->getKey(), 'order_no' => $o->order_no, 'customer' => $o->customer?->name, 'status' => $o->status->value, 'grand_total' => round((float) $o->grand_total, 2), 'created_at' => $o->created_at]),
-            'unpaid' => $due()->with('customer:id,name')->latest('id')->limit(8)->get()
+            'unpaid' => $due()->select(['id', 'customer_id', 'order_no', 'grand_total', 'paid_total'])
+                ->with('customer:id,name')->latest('id')->limit(8)->get()
                 ->map(fn (Order $o) => ['id' => $o->getKey(), 'order_no' => $o->order_no, 'customer' => $o->customer?->name, 'remaining' => $o->remaining()]),
 
             'weekly' => $this->weekly($branchIds, $now),
@@ -84,23 +140,6 @@ class DashboardService
     | Helper Methods
     |--------------------------------------------------------------------------
     */
-    private function revenue(Builder $query): float
-    {
-        return $this->sum($query->where('status', '!=', OrderStatusEnum::Cancelled->value), 'grand_total');
-    }
-
-    private function sum(Builder $query, string $column): float
-    {
-        return round((float) $query->sum($column), 2);
-    }
-
-    private function outstandingSum(Builder $query): float
-    {
-        $row = $query->selectRaw('COALESCE(SUM(grand_total - paid_total),0) as remaining')->first();
-
-        return round(max(0, (float) $row->remaining), 2);
-    }
-
     /**
      * @param  array<int, int>  $branchIds
      */
@@ -108,14 +147,15 @@ class DashboardService
     {
         $cutoff = $now->subDays(self::INACTIVE_DAYS)->utc();
 
-        return Order::query()
+        $inactive = Order::query()
             ->join('customers', 'customers.id', '=', 'orders.customer_id')
             ->whereIn('orders.branch_id', $branchIds)
             ->where('customers.phone', '!=', self::WALK_IN_PHONE)
             ->groupBy('orders.customer_id')
             ->havingRaw('MAX(orders.created_at) < ?', [$cutoff])
-            ->get(['orders.customer_id'])
-            ->count();
+            ->select('orders.customer_id');
+
+        return DB::query()->fromSub($inactive, 'inactive_customers')->count();
     }
 
     /**
@@ -132,17 +172,22 @@ class DashboardService
             $buckets[$day->format('Y-m-d')] = ['day' => $day->format('m-d'), 'revenue' => 0.0];
         }
 
+        $dayExpression = $this->ranges->localDateExpression('orders.created_at');
         Order::query()
             ->whereIn('branch_id', $branchIds)
             ->whereNull('archived_at')
             ->where('status', '!=', OrderStatusEnum::Cancelled->value)
             ->where('created_at', '>=', $start->utc())
-            ->get(['created_at', 'grand_total'])
-            ->each(function (Order $order) use (&$buckets) {
-                $key = $this->ranges->dayKey($order->created_at);
-                if (isset($buckets[$key])) {
-                    $buckets[$key]['revenue'] = round($buckets[$key]['revenue'] + (float) $order->grand_total, 2);
+            ->selectRaw("{$dayExpression} as day, COALESCE(SUM(grand_total), 0) as revenue")
+            ->groupByRaw($dayExpression)
+            ->get()
+            ->each(function ($row) use (&$buckets) {
+                $key = (string) $row->day;
+                if (! isset($buckets[$key])) {
+                    return;
                 }
+
+                $buckets[$key]['revenue'] = round((float) $row->revenue, 2);
             });
 
         return array_values($buckets);

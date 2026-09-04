@@ -9,8 +9,12 @@ use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Organization;
+use App\Services\Reports\AnalyticsService;
+use App\Services\Reports\DashboardService;
+use App\Services\Reports\ReportRangeService;
 use Database\Seeders\FeatureSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AnalyticsDashboardApiTest extends TestCase
@@ -57,6 +61,20 @@ class AnalyticsDashboardApiTest extends TestCase
         $this->organization->update(['feature_overrides' => ['analytics' => false]]);
 
         $this->getJson('/api/analytics')->assertStatus(403);
+    }
+
+    public function test_analytics_keeps_a_bounded_query_count_as_order_volume_grows(): void
+    {
+        $this->order(['grand_total' => 100]);
+        $range = app(ReportRangeService::class)->resolve(null, null);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        app(AnalyticsService::class)->build([$this->branch->getKey()], $range);
+        $queries = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertLessThanOrEqual(6, $queries);
     }
 
     /*
@@ -132,6 +150,19 @@ class AnalyticsDashboardApiTest extends TestCase
         $foreign = Branch::factory()->create(['organization_id' => $this->createOrganization()->getKey()]);
 
         $this->getJson('/api/dashboard?branch='.$foreign->getKey())->assertStatus(403);
+    }
+
+    public function test_the_dashboard_keeps_a_bounded_query_count_as_order_volume_grows(): void
+    {
+        $this->order(['grand_total' => 100]);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        app(DashboardService::class)->build([$this->branch->getKey()], $this->organization->getKey());
+        $queries = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertLessThanOrEqual(10, $queries);
     }
 
     private function order(array $attributes): Order

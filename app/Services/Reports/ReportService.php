@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Revenue is the sum of grand_total over non-cancelled orders in the range (the shared
  * definition), except the cancellation rate which counts every status. Simple totals are
- * aggregated in SQL; the daily series is bucketed in PHP in the Riyadh timezone.
+ * aggregated in SQL, including the daily series in the Riyadh timezone.
  */
 class ReportService
 {
@@ -29,6 +29,36 @@ class ReportService
     public function __construct(private readonly ReportRangeService $ranges) {}
 
     /**
+     * The public report screen's primary payload in one HTTP request.
+     *
+     * @param  array<int, int>  $branchIds
+     * @param  array<string, mixed>  $range
+     * @return array<string, mixed>
+     */
+    public function overview(array $branchIds, array $range): array
+    {
+        return [
+            'sales' => $this->sales($branchIds, $range),
+            'top_products' => $this->topProducts($branchIds, $range),
+        ];
+    }
+
+    /**
+     * The manager-only portion of the report screen in one HTTP request.
+     *
+     * @param  array<int, int>  $branchIds
+     * @param  array<string, mixed>  $range
+     * @return array<string, mixed>
+     */
+    public function managementOverview(array $branchIds, array $range, int $limit): array
+    {
+        return [
+            'top_customers' => $this->topCustomers($branchIds, $range, $limit),
+            'cancellation_rate' => $this->cancellationRate($branchIds, $range),
+        ];
+    }
+
+    /**
      * @param  array<int, int>  $branchIds
      * @param  array<string, mixed>  $range
      * @return array<string, mixed>
@@ -36,7 +66,7 @@ class ReportService
     public function sales(array $branchIds, array $range): array
     {
         $summary = $this->base($branchIds, $range)
-            ->selectRaw('COUNT(*) as orders, COALESCE(SUM(grand_total),0) as revenue, COALESCE(SUM(paid_total),0) as collected')
+            ->selectRaw('COUNT(*) as orders, COALESCE(SUM(grand_total),0) as revenue, COALESCE(SUM(paid_total),0) as collected, SUM(CASE WHEN subscription_id IS NOT NULL THEN 1 ELSE 0 END) as subscription_orders')
             ->first();
 
         $orders = (int) $summary->orders;
@@ -53,7 +83,12 @@ class ReportService
             ],
             'by_day' => $this->byDay($branchIds, $range),
             'by_status' => $this->byStatus($branchIds, $range),
-            'by_payment_method' => $this->byPaymentMethod($branchIds, $range, $collected),
+            'by_payment_method' => $this->byPaymentMethod(
+                $branchIds,
+                $range,
+                $collected,
+                (int) $summary->subscription_orders,
+            ),
         ];
     }
 
@@ -176,14 +211,19 @@ class ReportService
             $buckets[$day] = ['day' => $day, 'orders' => 0, 'revenue' => 0.0];
         }
 
+        $dayExpression = $this->ranges->localDateExpression('orders.created_at');
         $this->base($branchIds, $range)
-            ->get(['created_at', 'grand_total'])
-            ->each(function (Order $order) use (&$buckets) {
-                $day = $this->ranges->dayKey($order->created_at);
-                if (isset($buckets[$day])) {
-                    $buckets[$day]['orders']++;
-                    $buckets[$day]['revenue'] = round($buckets[$day]['revenue'] + (float) $order->grand_total, 2);
+            ->selectRaw("{$dayExpression} as day, COUNT(*) as orders, COALESCE(SUM(grand_total), 0) as revenue")
+            ->groupByRaw($dayExpression)
+            ->get()
+            ->each(function ($row) use (&$buckets) {
+                $day = (string) $row->day;
+                if (! isset($buckets[$day])) {
+                    return;
                 }
+
+                $buckets[$day]['orders'] = (int) $row->orders;
+                $buckets[$day]['revenue'] = round((float) $row->revenue, 2);
             });
 
         return array_values($buckets);
@@ -213,8 +253,12 @@ class ReportService
      * @param  array<string, mixed>  $range
      * @return array<int, array{name: string, count: int, revenue: float}>
      */
-    private function byPaymentMethod(array $branchIds, array $range, float $collected): array
-    {
+    private function byPaymentMethod(
+        array $branchIds,
+        array $range,
+        float $collected,
+        int $subscriptionOrders,
+    ): array {
         $payments = DB::table('payments')
             ->join('orders', 'orders.id', '=', 'payments.order_id')
             ->whereIn('orders.branch_id', $branchIds)
@@ -225,29 +269,24 @@ class ReportService
         $rows = [];
         $totalPayments = 0.0;
 
-        // Non-gateway payments grouped by method; gateway card payments become "online".
-        (clone $payments)->where('payments.via_gateway', false)
-            ->selectRaw('payments.method as method, COUNT(*) as count, SUM(payments.amount) as revenue')
-            ->groupBy('payments.method')
+        // Keep this as one grouped query. Gateway rows are folded into "online" in
+        // memory, regardless of which underlying card method the provider recorded.
+        $payments
+            ->selectRaw('payments.method as method, payments.via_gateway as via_gateway, COUNT(*) as count, SUM(payments.amount) as revenue')
+            ->groupBy('payments.method', 'payments.via_gateway')
             ->get()
             ->each(function ($r) use (&$rows, &$totalPayments) {
-                $rows[$r->method] = ['count' => (int) $r->count, 'revenue' => round((float) $r->revenue, 2)];
+                $key = $r->via_gateway ? 'online' : $r->method;
+                $rows[$key] ??= ['count' => 0, 'revenue' => 0.0];
+                $rows[$key]['count'] += (int) $r->count;
+                $rows[$key]['revenue'] = round($rows[$key]['revenue'] + (float) $r->revenue, 2);
                 $totalPayments += (float) $r->revenue;
             });
-
-        $online = (clone $payments)->where('payments.via_gateway', true)
-            ->selectRaw('COUNT(*) as count, COALESCE(SUM(payments.amount),0) as revenue')
-            ->first();
-        if ((int) $online->count > 0) {
-            $rows['online'] = ['count' => (int) $online->count, 'revenue' => round((float) $online->revenue, 2)];
-            $totalPayments += (float) $online->revenue;
-        }
 
         // Subscription coverage is derived: collected minus every recorded payment.
         $subCovered = round($collected - $totalPayments, 2);
         if ($subCovered > 0) {
-            $subCount = (int) $this->base($branchIds, $range)->whereNotNull('subscription_id')->count();
-            $rows['subscription'] = ['count' => $subCount, 'revenue' => $subCovered];
+            $rows['subscription'] = ['count' => $subscriptionOrders, 'revenue' => $subCovered];
         }
 
         $ordered = [];

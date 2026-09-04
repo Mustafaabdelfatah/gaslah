@@ -186,6 +186,19 @@ class CatalogAndCustomerApiTest extends TestCase
         $this->getJson('/api/customers?search=0502220000')
             ->assertOk()
             ->assertJsonPath('data.total', 1);
+
+        $this->getJson('/api/customers?search=050222')
+            ->assertOk()
+            ->assertJsonPath('data.total', 1);
+    }
+
+    public function test_paginated_lists_reject_an_unbounded_page_size(): void
+    {
+        $this->actingAsManager();
+
+        $this->getJson('/api/customers?per_page=201')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('per_page');
     }
 
     public function test_the_customer_listing_carries_exact_lifetime_and_outstanding_aggregates(): void
@@ -388,6 +401,37 @@ class CatalogAndCustomerApiTest extends TestCase
             ->assertJsonPath('data.stats.avg_basket', 150)
             ->assertJsonPath('data.loyalty.points', 20)
             ->assertJsonPath('data.loyalty.value', 10);
+    }
+
+    public function test_the_customer_screen_opens_with_one_aggregate_payload(): void
+    {
+        $this->actingAsManager();
+        $customer = Customer::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+        ]);
+        $order = Order::factory()->create([
+            'organization_id' => $this->organization->getKey(),
+            'branch_id' => $this->branch->getKey(),
+            'customer_id' => $customer->getKey(),
+            'grand_total' => 100,
+            'paid_total' => 25,
+            'payment_status' => 'partial',
+        ]);
+
+        $this->getJson("/api/customers/{$customer->getKey()}/overview")
+            ->assertOk()
+            ->assertJsonPath('data.customer.id', $customer->getKey())
+            ->assertJsonPath('data.orders.data.0.id', $order->getKey())
+            ->assertJsonPath('data.orders.data.0.remaining', 75)
+            ->assertJsonPath('data.outstanding_orders.data.0.id', $order->getKey())
+            ->assertJsonStructure(['data' => [
+                'customer' => ['stats', 'loyalty'],
+                'wallet' => ['balance', 'transactions'],
+                'orders' => ['data', 'total'],
+                'outstanding_orders' => ['data', 'total'],
+                'subscriptions' => ['data', 'total'],
+            ]]);
     }
 
     public function test_no_loyalty_programme_reads_as_zero_points_not_an_error(): void

@@ -73,12 +73,11 @@ class StaffPermissionService
         $roles = $user->userBranches()
             ->when(
                 $organizationId !== null,
-                fn ($query) => $query->whereHas(
-                    'branch',
-                    fn ($branch) => $branch->where('organization_id', $organizationId)
-                )
+                fn ($query) => $query
+                    ->join('branches', 'branches.id', '=', 'user_branches.branch_id')
+                    ->where('branches.organization_id', $organizationId),
             )
-            ->pluck('role')
+            ->pluck('user_branches.role')
             ->all();
 
         return StaffRoleEnum::highest($roles);

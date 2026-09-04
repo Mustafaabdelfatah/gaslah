@@ -17,6 +17,7 @@ class ZatcaGatewayClient
         try {
             $response = Http::baseUrl(rtrim((string) config('zatca.base_url'), '/'))
                 ->timeout((int) config('zatca.timeout', 15))
+                ->connectTimeout(5)
                 ->acceptJson()
                 ->asJson()
                 ->withHeaders([

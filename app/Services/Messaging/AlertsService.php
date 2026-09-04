@@ -11,6 +11,7 @@ use App\Models\InventoryItem;
 use App\Models\Order;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Live operational alerts for an organization, derived from current data (no table).
@@ -92,7 +93,7 @@ class AlertsService
      */
     private function unpaid(array $branchIds): array
     {
-        $query = $this->activeOrders($branchIds)->whereIn('payment_status', self::DUE_STATUSES);
+        $query = $this->activeOrders($branchIds)->outstanding();
         $amount = round((float) (clone $query)->selectRaw('COALESCE(SUM(grand_total - paid_total),0) as remaining')->value('remaining'), 2);
 
         $group = $this->group('unpaid', 'سلال غير مدفوعة', 'warning', 'wallet', $query->count(),
@@ -143,7 +144,9 @@ class AlertsService
             ->groupBy('orders.customer_id')
             ->havingRaw('MAX(orders.created_at) < ?', [$cutoff]);
 
-        $count = (clone $base)->get(['orders.customer_id'])->count();
+        $count = DB::query()
+            ->fromSub((clone $base)->select('orders.customer_id'), 'lapsed_customers')
+            ->count();
 
         $items = (clone $base)
             ->selectRaw('orders.customer_id as id, customers.name as name, customers.phone as phone, MAX(orders.created_at) as last_at')
